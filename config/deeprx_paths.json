@@ -9,20 +9,44 @@
     "pytorch_expected_cuda": "cu128"
   },
   "mathworks_assets": {
-    "six_g_exploration_library_signpost": "C:/Users/Chen Yan/Desktop/AI receiver/论文复现/DeepRx/vendor/mathworks/6gexplorationlibrary.mlpkginstall",
     "six_g_exploration_library_base_code": "NRX5G",
-    "six_g_exploration_library_installed": false,
+    "six_g_exploration_library_installed": true,
+    "six_g_exploration_library_version": "25.2.0",
+    "six_g_exploration_library_enabled": true,
+    "six_g_support_package_path": "C:/ProgramData/MATLAB/SupportPackages/R2025b/toolbox/5g/supportpackages/pre6g",
     "deep_rx_helper_functions_on_path": false,
+    "official_example_root": "C:/Users/Chen Yan/Desktop/AI receiver/论文复现/DeepRx/vendor/mathworks/examples",
+    "matlab_deeprx_example_dir": "C:/Users/Chen Yan/Desktop/AI receiver/论文复现/DeepRx/vendor/mathworks/examples/AINativeFullyConvolutionalReceiverExample",
+    "pytorch_coexecution_example_dir": "C:/Users/Chen Yan/Desktop/AI receiver/论文复现/DeepRx/vendor/mathworks/examples/VerifyAINativeReceiverUsingMATLABPytorchCoexecutionExample",
+    "deep_rx_2m_mat": "C:/Users/Chen Yan/Desktop/AI receiver/论文复现/DeepRx/vendor/mathworks/examples/AINativeFullyConvolutionalReceiverExample/DeepRx_2M.mat",
+    "deeprx_30k_pth": "C:/Users/Chen Yan/Desktop/AI receiver/论文复现/DeepRx/vendor/mathworks/examples/VerifyAINativeReceiverUsingMATLABPytorchCoexecutionExample/torch_trained_network/deeprx_30k.pth",
+    "official_matlab_helper_files": [
+      "C:/Users/Chen Yan/Desktop/AI receiver/论文复现/DeepRx/vendor/mathworks/examples/AINativeFullyConvolutionalReceiverExample/hCreateDeepRx.m",
+      "C:/Users/Chen Yan/Desktop/AI receiver/论文复现/DeepRx/vendor/mathworks/examples/AINativeFullyConvolutionalReceiverExample/hTrainDeepRx.m",
+      "C:/Users/Chen Yan/Desktop/AI receiver/论文复现/DeepRx/vendor/mathworks/examples/AINativeFullyConvolutionalReceiverExample/hEvaluateLinkPerformance.m",
+      "C:/Users/Chen Yan/Desktop/AI receiver/论文复现/DeepRx/vendor/mathworks/examples/AINativeFullyConvolutionalReceiverExample/hGetFeaturesAndLabels.m",
+      "C:/Users/Chen Yan/Desktop/AI receiver/论文复现/DeepRx/vendor/mathworks/examples/AINativeFullyConvolutionalReceiverExample/hGetAdditionalSystemParameters.m",
+      "C:/Users/Chen Yan/Desktop/AI receiver/论文复现/DeepRx/vendor/mathworks/examples/VerifyAINativeReceiverUsingMATLABPytorchCoexecutionExample/hCreateTorchDeepRx.m",
+      "C:/Users/Chen Yan/Desktop/AI receiver/论文复现/DeepRx/vendor/mathworks/examples/VerifyAINativeReceiverUsingMATLABPytorchCoexecutionExample/helperSetupPyenv.m",
+      "C:/Users/Chen Yan/Desktop/AI receiver/论文复现/DeepRx/vendor/mathworks/examples/VerifyAINativeReceiverUsingMATLABPytorchCoexecutionExample/helperLibraryChecker.m"
+    ],
+    "official_pytorch_files": [
+      "C:/Users/Chen Yan/Desktop/AI receiver/论文复现/DeepRx/vendor/mathworks/examples/VerifyAINativeReceiverUsingMATLABPytorchCoexecutionExample/deeprx.py",
+      "C:/Users/Chen Yan/Desktop/AI receiver/论文复现/DeepRx/vendor/mathworks/examples/VerifyAINativeReceiverUsingMATLABPytorchCoexecutionExample/deeprx_model.py"
+    ],
     "required_helper_functions": [
       "hCreateDeepRx",
       "hTrainDeepRx",
-      "hGeneratePUSCHTrainingBatch",
-      "hEvaluatePUSCHAtSNR"
+      "hGetFeaturesAndLabels",
+      "hGetAdditionalSystemParameters",
+      "hCreateTorchDeepRx",
+      "helperSetupPyenv"
     ]
   },
   "notes": [
     "5G Toolbox, Deep Learning Toolbox, and Parallel Computing Toolbox are installed in MATLAB R2025b.",
-    "6G Exploration Library signpost was downloaded from the official MathWorks File Exchange page, but the add-on payload still needs MATLAB Add-On Installer/login to install.",
+    "6G Exploration Library for 5G Toolbox is installed and enabled in MATLAB R2025b with identifier NRX5G.",
+    "Official MathWorks DeepRx example files were copied with setupExample into vendor/mathworks/examples for local reference by Python tooling.",
     "MATLAB GPU works after enabling parallel.gpu.enableCUDAForwardCompatibility(true) for RTX 5060 compute capability 12.0.",
     "PyTorch CUDA is available in the project virtual environment."
   ]

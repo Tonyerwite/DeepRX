@@ -28,31 +28,31 @@ Official source checked:
 - MathWorks documentation: `https://www.mathworks.com/help/5g/6g-exploration-library.html`
 - MathWorks File Exchange download entry: `https://www.mathworks.com/matlabcentral/fileexchange/157771-6g-exploration-library-for-5g-toolbox`
 
-Downloaded official signpost:
-
-- `vendor/mathworks/6gexplorationlibrary.mlpkginstall`
-- Package metadata says:
-  - Repository: MathWorks
-  - Name: 6G Exploration Library
-  - FullName: 6G Exploration Library for 5G Toolbox
-  - BaseProduct: 5G Toolbox
-  - BaseCode: NRX5G
-
 Current status:
 
-- The signpost is downloaded.
-- The actual add-on payload is not installed yet.
-- `matlab.addons.install` cannot install `.mlpkginstall`; it requires `.mltbx`.
-- DeepRx helper functions are not currently on MATLAB path:
-  - `hCreateDeepRx`
-  - `hTrainDeepRx`
-  - `hGeneratePUSCHTrainingBatch`
-  - `hEvaluatePUSCHAtSNR`
+- The 6G Exploration Library for 5G Toolbox is installed and enabled in MATLAB R2025b.
+- Installed add-on identifier: `NRX5G`
+- Installed add-on version: `25.2.0`
+- MATLAB support package path: `C:/ProgramData/MATLAB/SupportPackages/R2025b/toolbox/5g/supportpackages/pre6g`
+- The support package itself only places the pre-6G config classes on the MATLAB path.
+- The DeepRx helper functions are example-local files, not global toolbox functions, so `which hCreateDeepRx` is still empty until the copied example folder is added to path.
 
-Action needed before exact official-data alignment:
+Official example assets now copied locally with MATLAB `setupExample`:
 
-- Open `vendor/mathworks/6gexplorationlibrary.mlpkginstall` with MATLAB R2025b Add-On Installer, sign in if prompted, and complete installation.
-- After installation, rerun the helper-function path check.
+- `vendor/mathworks/examples/AINativeFullyConvolutionalReceiverExample/DeepRx_2M.mat`
+- `vendor/mathworks/examples/AINativeFullyConvolutionalReceiverExample/hCreateDeepRx.m`
+- `vendor/mathworks/examples/AINativeFullyConvolutionalReceiverExample/hTrainDeepRx.m`
+- `vendor/mathworks/examples/AINativeFullyConvolutionalReceiverExample/hGetFeaturesAndLabels.m`
+- `vendor/mathworks/examples/AINativeFullyConvolutionalReceiverExample/hGetAdditionalSystemParameters.m`
+- `vendor/mathworks/examples/VerifyAINativeReceiverUsingMATLABPytorchCoexecutionExample/deeprx.py`
+- `vendor/mathworks/examples/VerifyAINativeReceiverUsingMATLABPytorchCoexecutionExample/deeprx_model.py`
+- `vendor/mathworks/examples/VerifyAINativeReceiverUsingMATLABPytorchCoexecutionExample/hCreateTorchDeepRx.m`
+- `vendor/mathworks/examples/VerifyAINativeReceiverUsingMATLABPytorchCoexecutionExample/torch_trained_network/deeprx_30k.pth`
+
+Remaining action before exact official-data alignment:
+
+- Use the copied example-local MATLAB helpers as the reference for Python data generation and evaluation.
+- Add the example folder to MATLAB path only when generating official reference tensors; do not rely on `which` finding those helpers globally.
 
 ## GPU And Parallel
 
@@ -122,6 +122,5 @@ Not fully aligned yet:
 
 Next required milestone:
 
-- Install 6G Exploration Library.
-- Export or bridge official MATLAB-generated DeepRx inputs/labels into Python.
+- Export or bridge official MATLAB-generated DeepRx inputs/labels into Python using the copied official helpers.
 - Replace approximate Python data generator for paper-level runs with official-generated tensors.

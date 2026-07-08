@@ -75,6 +75,5 @@ weights/
 *.rar
 *.7z
 
-# Vendor installers downloaded locally from official sites
-vendor/mathworks/*.mlpkginstall
-vendor/mathworks/*.mltbx
+# Vendor installers/examples downloaded locally from official sites
+vendor/mathworks/

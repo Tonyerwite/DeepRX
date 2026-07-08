@@ -1,0 +1,24 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "deeprx-reproduction"
+version = "0.1.0"
+description = "PyTorch reproduction scaffold for DeepRx: Fully Convolutional Deep Learning Receiver."
+requires-python = ">=3.9"
+dependencies = [
+  "numpy",
+  "matplotlib",
+  "torch",
+]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
+filterwarnings = [
+  "ignore::pyparsing.exceptions.PyparsingDeprecationWarning",
+]

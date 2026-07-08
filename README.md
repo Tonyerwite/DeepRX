@@ -67,7 +67,7 @@ By default the SNR grid is `0:2:12` dB. This command is a smoke test. With only 
 This uses the 312-subcarrier, 14-symbol, 2-RX-antenna tensor dimensions and the paper-style online generator:
 
 ```powershell
-.\.venv\Scripts\python.exe scripts\train_paper_config.py --steps 30000 --batch-size 20 --device cuda
+.\.venv\Scripts\python.exe scripts\train_paper_config.py --steps 30000 --batch-size 20 --device cuda --save-every 1000 --log-every 10 --output checkpoints\deeprx_paper_config.pt
 ```
 
 For CPU-only testing, reduce the step count:
@@ -77,6 +77,8 @@ For CPU-only testing, reduce the step count:
 ```
 
 The default `--max-bits 4` matches the MathWorks 16QAM PyTorch example output shape `[312,14,4]`. Use `--max-bits 8` for the paper/reference-code multi-modulation masking setup.
+
+The script stores model, optimizer, args, and logged history in the checkpoint, so a long run leaves recoverable progress every `--save-every` steps.
 
 After training, evaluate a checkpoint at `0:2:12` dB:
 

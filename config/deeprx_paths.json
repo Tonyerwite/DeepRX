@@ -1,0 +1,29 @@
+{
+  "matlab": {
+    "r2025b_executable": "D:/Program Files/MATLAB/R2025b/bin/matlab.exe",
+    "release": "R2025b",
+    "version": "25.2.0.2998904"
+  },
+  "python": {
+    "venv_python": "C:/Users/Chen Yan/Desktop/AI receiver/论文复现/DeepRx/.venv/Scripts/python.exe",
+    "pytorch_expected_cuda": "cu128"
+  },
+  "mathworks_assets": {
+    "six_g_exploration_library_signpost": "C:/Users/Chen Yan/Desktop/AI receiver/论文复现/DeepRx/vendor/mathworks/6gexplorationlibrary.mlpkginstall",
+    "six_g_exploration_library_base_code": "NRX5G",
+    "six_g_exploration_library_installed": false,
+    "deep_rx_helper_functions_on_path": false,
+    "required_helper_functions": [
+      "hCreateDeepRx",
+      "hTrainDeepRx",
+      "hGeneratePUSCHTrainingBatch",
+      "hEvaluatePUSCHAtSNR"
+    ]
+  },
+  "notes": [
+    "5G Toolbox, Deep Learning Toolbox, and Parallel Computing Toolbox are installed in MATLAB R2025b.",
+    "6G Exploration Library signpost was downloaded from the official MathWorks File Exchange page, but the add-on payload still needs MATLAB Add-On Installer/login to install.",
+    "MATLAB GPU works after enabling parallel.gpu.enableCUDAForwardCompatibility(true) for RTX 5060 compute capability 12.0.",
+    "PyTorch CUDA is available in the project virtual environment."
+  ]
+}

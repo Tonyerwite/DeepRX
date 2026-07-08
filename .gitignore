@@ -1,0 +1,76 @@
+# Local assistant/tooling state
+.agents/
+.codex/
+
+# OS/editor files
+.DS_Store
+Thumbs.db
+Desktop.ini
+*.swp
+*.swo
+*~
+.vscode/
+.idea/
+
+# Python cache/build artifacts
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+build/
+dist/
+*.egg-info/
+
+# Virtual environments
+.venv/
+venv/
+env/
+ENV/
+
+# Jupyter
+.ipynb_checkpoints/
+
+# Secrets and local config
+.env
+.env.*
+!.env.example
+
+# Logs
+*.log
+logs/
+
+# Data, model, and experiment outputs
+data/
+dataset/
+datasets/
+raw_data/
+processed_data/
+outputs/
+output/
+results/
+runs/
+wandb/
+tensorboard/
+checkpoints/
+models/
+weights/
+
+# Common large/generated model artifacts
+*.ckpt
+*.pt
+*.pth
+*.onnx
+*.h5
+*.hdf5
+
+# Archives generated during experiments
+*.zip
+*.tar
+*.tar.gz
+*.tgz
+*.rar
+*.7z

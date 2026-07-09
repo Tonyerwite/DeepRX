@@ -153,23 +153,6 @@ class DeepRx(nn.Module):
     def count_parameters(self) -> int:
         return sum(param.numel() for param in self.parameters() if param.requires_grad)
 
-    def train_step(
-        self,
-        inputs: torch.Tensor,
-        target_bits: torch.Tensor,
-        data_mask: torch.Tensor,
-        bit_mask: torch.Tensor,
-        optimizer: torch.optim.Optimizer,
-    ) -> float:
-        self.train()
-        optimizer.zero_grad(set_to_none=True)
-        logits = self(inputs)
-        loss = DeepRxLoss()(logits, target_bits, data_mask, bit_mask)
-        loss.backward()
-        torch.nn.utils.clip_grad_norm_(self.parameters(), max_norm=1.0)
-        optimizer.step()
-        return float(loss.detach().cpu().item())
-
 
 class DeepRxLoss(nn.Module):
     def forward(

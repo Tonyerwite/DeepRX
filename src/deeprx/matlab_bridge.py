@@ -14,7 +14,12 @@ from deeprx.model import create_bit_mask
 
 @dataclass(frozen=True)
 class PaperFigure6Config:
-    """Paper Table II and Fig. 6(a) settings for uncoded BER reproduction."""
+    """Paper Table II and Fig. 6(a) settings for uncoded BER reproduction.
+
+    The paper's original dataset seed and frame order are not public. This
+    config models the described fixed 500k-TTI, 60/40 split with deterministic
+    frame indices, while MATLAB still generates each indexed frame online.
+    """
 
     dataset_ttis: int = 500_000
     ttis_per_frame: int = 10

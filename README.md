@@ -47,7 +47,7 @@ C:\Users\Chen Yan\Desktop\AI receiver\论文复现\DeepRx\.venv\Scripts\python.e
 .\.venv\Scripts\python.exe -m pytest -q
 ```
 
-Expected result: `20 passed`.
+Expected result: `22 passed`.
 
 ## Official Paper Reproduction
 
@@ -82,7 +82,9 @@ Train PyTorch using MATLAB/5G Toolbox generated PUSCH batches:
 .\.venv\Scripts\python.exe scripts\train_official_matlab.py --device cuda --output checkpoints\deeprx_official_matlab.pt --save-every 500 --log-every 10
 ```
 
-The defaults match the paper-scale training setup: `30000` iterations, `8` MATLAB frames per step (`80` TTIs), LAMB optimizer, learning rate `1e-2`, weight decay `1e-4`, 800-step warmup, and linear decay after 30% of training. The script uses a deterministic paper dataset index: `500000` TTIs are split into `60%` training frames and `40%` validation frames, and each 10-TTI frame in an 80-TTI training step receives its own randomized channel/SNR/DM-RS parameters.
+The defaults match the paper-scale training setup where the paper is explicit: `30000` iterations, `8` MATLAB frames per step (`80` TTIs), LAMB optimizer, learning rate `1e-2`, weight decay `1e-4`, 800-step warmup, and linear decay after 30% of training. The paper does not publish LAMB betas/epsilon, so this implementation exposes them explicitly and defaults to common LAMB values: `--lamb-beta1 0.9`, `--lamb-beta2 0.999`, and `--lamb-eps 1e-6`.
+
+The script uses a deterministic online paper-dataset model rather than a materialized copy of the authors' private dataset. It follows the described scale and split: `500000` TTIs, `10` TTIs per frame, `60%` training frames, `40%` validation frames, and one randomized channel/SNR/DM-RS draw per 10-TTI frame. The original dataset seed, frame order, and reuse policy were not published, so these generated frames should be described as aligned to the paper protocol, not bit-identical to the authors' dataset.
 
 For a quick hardware sanity check, override the batch size and step count:
 

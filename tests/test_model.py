@@ -34,6 +34,10 @@ def test_deeprx_four_bit_model_matches_mathworks_parameter_count():
     assert model.count_parameters() == 1_232_516
 
 
+def test_deeprx_model_exposes_no_alternate_training_step():
+    assert not hasattr(DeepRx, "train_step")
+
+
 def test_deeprx_loads_mathworks_pytorch_checkpoint_when_available():
     if not MATHWORKS_PYTORCH_CHECKPOINT.exists():
         return

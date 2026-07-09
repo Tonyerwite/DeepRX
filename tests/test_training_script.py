@@ -27,8 +27,32 @@ def test_training_defaults_match_paper_scale():
     assert args.optimizer == "lamb"
     assert args.lr == 1e-2
     assert args.weight_decay == 1e-4
+    assert args.lamb_beta1 == 0.9
+    assert args.lamb_beta2 == 0.999
+    assert args.lamb_eps == 1e-6
     assert args.warmup_steps == 800
     assert args.decay_start_fraction == 0.3
+
+
+def test_lamb_optimizer_uses_explicit_cli_hyperparameters():
+    train = _load_training_script()
+    args = train.build_arg_parser().parse_args(
+        [
+            "--lamb-beta1",
+            "0.8",
+            "--lamb-beta2",
+            "0.95",
+            "--lamb-eps",
+            "1e-5",
+        ]
+    )
+    model = torch.nn.Linear(2, 1)
+
+    optimizer = train._make_optimizer(args, model)
+
+    group = optimizer.param_groups[0]
+    assert group["betas"] == (0.8, 0.95)
+    assert group["eps"] == 1e-5
 
 
 def test_training_uses_one_randomized_matlab_frame_per_paper_frame():

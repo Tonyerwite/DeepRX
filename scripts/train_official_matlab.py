@@ -90,6 +90,9 @@ def build_arg_parser():
     parser.add_argument("--optimizer", choices=("lamb", "adamw"), default="lamb")
     parser.add_argument("--lr", type=float, default=1e-2)
     parser.add_argument("--weight-decay", type=float, default=1e-4)
+    parser.add_argument("--lamb-beta1", type=float, default=0.9)
+    parser.add_argument("--lamb-beta2", type=float, default=0.999)
+    parser.add_argument("--lamb-eps", type=float, default=1e-6)
     parser.add_argument("--warmup-steps", type=int, default=800)
     parser.add_argument("--decay-start-fraction", type=float, default=0.3)
     parser.add_argument("--device", default="cuda" if torch.cuda.is_available() else "cpu")
@@ -193,7 +196,13 @@ def main():
 
 def _make_optimizer(args, model):
     if args.optimizer == "lamb":
-        return Lamb(model.parameters(), lr=args.lr, weight_decay=args.weight_decay)
+        return Lamb(
+            model.parameters(),
+            lr=args.lr,
+            betas=(args.lamb_beta1, args.lamb_beta2),
+            eps=args.lamb_eps,
+            weight_decay=args.weight_decay,
+        )
     if args.optimizer == "adamw":
         return torch.optim.AdamW(model.parameters(), lr=args.lr, weight_decay=args.weight_decay)
     raise ValueError(f"Unsupported optimizer: {args.optimizer}")

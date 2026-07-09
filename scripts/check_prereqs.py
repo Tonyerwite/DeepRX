@@ -41,6 +41,7 @@ def iter_configured_path_checks(data: Dict) -> Iterable[PathCheck]:
         "deeprx_build_paper_sim_parameters.m",
         "deeprx_export_official_batch.m",
         "deeprx_evaluate_practical_lmmse.m",
+        "deeprx_evaluate_known_channel_lmmse.m",
         "deeprx_evaluate_pytorch_deeprx.m",
         "requirements_6GVerify_project.txt",
     ]

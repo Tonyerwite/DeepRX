@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import json
-import random
 from pathlib import Path
 from typing import Dict, Iterable, List
 
@@ -15,7 +14,8 @@ from deeprx.matlab_bridge import (
     MatlabDeepRxBridge,
     PaperFigure6Config,
     load_matlab_bridge_paths,
-    sample_official_parameters,
+    paper_dataset_iteration,
+    sample_paper_dataset_parameters,
 )
 
 
@@ -24,36 +24,37 @@ def run_figure6a_reproduction(
     output_dir: Path,
     *,
     snr_points: Iterable[float] | None = None,
-    samples_per_point: int = 1,
+    samples_per_point: int | None = None,
     n_frames: int = 1,
     seed: int = 2026,
 ) -> Dict:
     config = PaperFigure6Config()
     snr_values = list(config.figure6_sinr_points_db if snr_points is None else snr_points)
+    samples = config.validation_samples_per_point if samples_per_point is None else samples_per_point
     output_dir.mkdir(parents=True, exist_ok=True)
-    rng = random.Random(seed)
-    metrics = {
-        "mode": "paper_figure6a_official_matlab",
-        "checkpoint": str(checkpoint_path),
-        "snr_db": snr_values,
-        "samples_per_point": samples_per_point,
-        "n_frames": n_frames,
-        "curves": {
-            "deeprx_1_pilot": [],
-            "deeprx_2_pilots": [],
-            "lmmse_1_pilot": [],
-            "lmmse_2_pilots": [],
-        },
-    }
+    metrics = initialize_figure6a_metrics(
+        checkpoint_path=checkpoint_path,
+        snr_values=snr_values,
+        samples_per_point=samples,
+        n_frames=n_frames,
+    )
 
     with MatlabDeepRxBridge(load_matlab_bridge_paths()) as bridge:
-        iteration = 30_001
         for snr in snr_values:
+            known_channel_values: List[float] = []
             for pilot_count in (1, 2):
                 deep_values: List[float] = []
                 lmmse_values: List[float] = []
-                for _ in range(samples_per_point):
-                    params = sample_official_parameters(config, rng, mode="validate", snr_db=float(snr), pilot_count=pilot_count)
+                for sample_index in range(samples):
+                    params = sample_paper_dataset_parameters(
+                        config,
+                        split="validation",
+                        index=sample_index,
+                        seed=seed,
+                        snr_db=float(snr),
+                        pilot_count=pilot_count,
+                    )
+                    iteration = paper_dataset_iteration(config, split="validation", index=sample_index)
                     deep_values.append(
                         bridge.evaluate_pytorch_deeprx(
                             params,
@@ -69,15 +70,45 @@ def run_figure6a_reproduction(
                             n_frames=n_frames,
                         )
                     )
-                    iteration += 1
+                    known_channel_values.append(
+                        bridge.evaluate_known_channel_lmmse(
+                            params,
+                            iteration=iteration,
+                            n_frames=n_frames,
+                        )
+                    )
                 suffix = "1_pilot" if pilot_count == 1 else "2_pilots"
                 metrics["curves"][f"deeprx_{suffix}"].append(_mean(deep_values))
                 metrics["curves"][f"lmmse_{suffix}"].append(_mean(lmmse_values))
+            metrics["curves"]["lmmse_known_channel"].append(_mean(known_channel_values))
 
     metrics_path = output_dir / "figure6a_metrics.json"
     metrics_path.write_text(json.dumps(metrics, indent=2), encoding="utf-8")
     plot_figure6a(metrics, output_dir / "figure6a_uncoded_ber.png")
     return metrics
+
+
+def initialize_figure6a_metrics(
+    *,
+    checkpoint_path: Path,
+    snr_values: Iterable[float],
+    samples_per_point: int,
+    n_frames: int,
+) -> Dict:
+    return {
+        "mode": "paper_figure6a_official_matlab",
+        "checkpoint": str(checkpoint_path),
+        "snr_db": list(snr_values),
+        "samples_per_point": samples_per_point,
+        "n_frames": n_frames,
+        "curves": {
+            "deeprx_1_pilot": [],
+            "deeprx_2_pilots": [],
+            "lmmse_1_pilot": [],
+            "lmmse_2_pilots": [],
+            "lmmse_known_channel": [],
+        },
+    }
 
 
 def plot_figure6a(metrics: Dict, path: Path) -> None:
@@ -88,6 +119,7 @@ def plot_figure6a(metrics: Dict, path: Path) -> None:
     plt.semilogy(snr, curves["deeprx_2_pilots"], "--D", color="blue", label="DeepRx, 2 pilots")
     plt.semilogy(snr, curves["lmmse_1_pilot"], "-s", color="red", label="LMMSE, 1 pilot")
     plt.semilogy(snr, curves["lmmse_2_pilots"], "--^", color="red", label="LMMSE, 2 pilots")
+    plt.semilogy(snr, curves["lmmse_known_channel"], ":X", color="green", label="LMMSE, known channel")
     plt.xlabel("SINR (dB)")
     plt.ylabel("Uncoded BER")
     plt.ylim(1e-4, 1.0)

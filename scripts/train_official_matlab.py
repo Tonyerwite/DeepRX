@@ -11,7 +11,13 @@ SRC = ROOT / "src"
 if str(SRC) not in sys.path:
     sys.path.insert(0, str(SRC))
 
-from deeprx.matlab_bridge import MatlabDeepRxBridge, PaperFigure6Config, sample_official_parameters
+from deeprx.matlab_bridge import (
+    MatlabDeepRxBridge,
+    OfficialBatch,
+    PaperFigure6Config,
+    paper_dataset_iteration,
+    sample_paper_dataset_parameters,
+)
 from deeprx.model import DeepRx, DeepRxLoss, compute_ber
 
 
@@ -95,6 +101,37 @@ def build_arg_parser():
     return parser
 
 
+def paper_training_frame_specs(config: PaperFigure6Config, *, step: int, n_frames: int, seed: int):
+    start_index = step * n_frames
+    specs = []
+    for frame_offset in range(n_frames):
+        index = start_index + frame_offset
+        specs.append(
+            (
+                sample_paper_dataset_parameters(config, split="train", index=index, seed=seed),
+                paper_dataset_iteration(config, split="train", index=index),
+            )
+        )
+    return specs
+
+
+def generate_paper_training_batch(
+    bridge: MatlabDeepRxBridge,
+    config: PaperFigure6Config,
+    rng: random.Random,
+    *,
+    step: int,
+    n_frames: int,
+    seed: int,
+) -> OfficialBatch:
+    del rng
+    batches = [
+        bridge.generate_training_batch(parameters, iteration=iteration, n_frames=1)
+        for parameters, iteration in paper_training_frame_specs(config, step=step, n_frames=n_frames, seed=seed)
+    ]
+    return _concat_official_batches(batches)
+
+
 def main():
     args = build_arg_parser().parse_args()
 
@@ -124,8 +161,8 @@ def main():
                 decay_start_fraction=args.decay_start_fraction,
             )
             _set_optimizer_lr(optimizer, lr)
-            params = sample_official_parameters(config, rng, mode="train")
-            batch = bridge.generate_training_batch(params, iteration=step + 1, n_frames=args.n_frames)
+            frame_specs = paper_training_frame_specs(config, step=step, n_frames=args.n_frames, seed=args.seed)
+            batch = generate_paper_training_batch(bridge, config, rng, step=step, n_frames=args.n_frames, seed=args.seed)
             inputs = batch.inputs.to(device)
             targets = batch.target_bits.to(device)
             data_mask = batch.data_mask.to(device)
@@ -136,10 +173,10 @@ def main():
             logits = model(inputs)
             loss = criterion(logits, targets, data_mask, bit_mask)
             loss.backward()
-            torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
             optimizer.step()
 
             if step % args.log_every == 0:
+                params = frame_specs[0][0]
                 ber = compute_ber(logits.detach(), targets, data_mask, bit_mask)
                 history["step"].append(step)
                 history["loss"].append(float(loss.detach().cpu()))
@@ -165,6 +202,17 @@ def _make_optimizer(args, model):
 def _set_optimizer_lr(optimizer, lr):
     for group in optimizer.param_groups:
         group["lr"] = lr
+
+
+def _concat_official_batches(batches):
+    if not batches:
+        raise ValueError("At least one batch is required")
+    return OfficialBatch(
+        inputs=torch.cat([batch.inputs for batch in batches], dim=0),
+        target_bits=torch.cat([batch.target_bits for batch in batches], dim=0),
+        data_mask=torch.cat([batch.data_mask for batch in batches], dim=0),
+        bit_mask=batches[0].bit_mask,
+    )
 
 
 def _save_checkpoint(path, model, optimizer, step, args, history):

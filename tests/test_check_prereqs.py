@@ -37,4 +37,5 @@ def test_iter_configured_path_checks_includes_official_deeprx_assets(tmp_path):
     assert "6G support package path" in names
     assert "Official deeprx_30k.pth" in names
     assert "MATLAB runtime file: hGetFeaturesAndLabels.m" in names
+    assert "MATLAB runtime file: deeprx_evaluate_known_channel_lmmse.m" in names
     assert "Official PyTorch runtime file: deeprx_model.py" in names

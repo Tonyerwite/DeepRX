@@ -4,7 +4,10 @@ import torch
 from deeprx.matlab_bridge import (
     PaperFigure6Config,
     convert_official_batch_arrays,
+    paper_dataset_frame_count,
+    paper_dataset_split_frame_counts,
     pilot_count_to_dmrs_additional_position,
+    sample_paper_dataset_parameters,
 )
 
 
@@ -19,6 +22,35 @@ def test_paper_figure6_config_matches_paper_table_ii_and_figure_6a():
     assert config.train_channels == ("CDL-B", "CDL-C", "CDL-D", "TDL-B", "TDL-C", "TDL-D")
     assert config.validation_channels == ("CDL-A", "CDL-E", "TDL-A", "TDL-E")
     assert config.figure6_sinr_points_db == (0.0, 3.0, 6.0, 9.0, 12.0, 15.0, 18.0, 21.0)
+    assert config.dataset_ttis == 500_000
+    assert config.ttis_per_frame == 10
+    assert config.train_fraction == 0.6
+    assert config.validation_samples_per_point == 500
+
+
+def test_paper_dataset_split_uses_fixed_frame_counts():
+    config = PaperFigure6Config()
+
+    assert paper_dataset_frame_count(config) == 50_000
+    assert paper_dataset_split_frame_counts(config) == (30_000, 20_000)
+
+
+def test_validation_dataset_parameters_are_fixed_across_snr_points():
+    config = PaperFigure6Config()
+
+    low = sample_paper_dataset_parameters(config, split="validation", index=7, seed=2026, snr_db=0.0, pilot_count=2)
+    high = sample_paper_dataset_parameters(config, split="validation", index=7, seed=2026, snr_db=21.0, pilot_count=2)
+    one_pilot = sample_paper_dataset_parameters(config, split="validation", index=7, seed=2026, snr_db=21.0, pilot_count=1)
+
+    assert low.snr_db == 0.0
+    assert high.snr_db == 21.0
+    assert low.channel_model == high.channel_model
+    assert low.delay_spread_s == high.delay_spread_s
+    assert low.max_doppler_shift_hz == high.max_doppler_shift_hz
+    assert low.dmrs_configuration_type == high.dmrs_configuration_type
+    assert one_pilot.dmrs_additional_position == 0
+    assert high.dmrs_additional_position == 1
+    assert one_pilot.channel_model == high.channel_model
 
 
 def test_pilot_count_maps_to_official_dmrs_additional_position():

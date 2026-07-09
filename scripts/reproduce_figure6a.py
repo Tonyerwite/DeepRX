@@ -11,15 +11,20 @@ from deeprx.matlab_bridge import load_matlab_bridge_paths
 from deeprx.official_experiments import run_figure6a_reproduction
 
 
-def main():
+def build_arg_parser():
     paths = load_matlab_bridge_paths(ROOT)
     parser = argparse.ArgumentParser(description="Reproduce DeepRx paper Fig. 6(a) uncoded BER with official MATLAB PUSCH simulation.")
     parser.add_argument("--checkpoint", default=str(paths.default_checkpoint))
     parser.add_argument("--output-dir", default="outputs/figure6a")
-    parser.add_argument("--samples-per-point", type=int, default=1)
+    parser.add_argument("--samples-per-point", type=int, default=500)
     parser.add_argument("--n-frames", type=int, default=1)
     parser.add_argument("--seed", type=int, default=2026)
     parser.add_argument("--snr-points", default="", help="Comma-separated SNR/SINR points. Default: paper 0,3,...,21 dB.")
+    return parser
+
+
+def main():
+    parser = build_arg_parser()
     args = parser.parse_args()
 
     snr_points = None

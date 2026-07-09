@@ -16,6 +16,10 @@ from deeprx.model import create_bit_mask
 class PaperFigure6Config:
     """Paper Table II and Fig. 6(a) settings for uncoded BER reproduction."""
 
+    dataset_ttis: int = 500_000
+    ttis_per_frame: int = 10
+    train_fraction: float = 0.6
+    validation_samples_per_point: int = 500
     carrier_frequency_hz: float = 4.0e9
     n_size_grid: int = 26
     subcarrier_spacing_khz: int = 15
@@ -63,6 +67,68 @@ def pilot_count_to_dmrs_additional_position(pilot_count: int) -> int:
     if pilot_count == 2:
         return 1
     raise ValueError(f"pilot_count must be 1 or 2, got {pilot_count}")
+
+
+def paper_dataset_frame_count(config: PaperFigure6Config) -> int:
+    if config.dataset_ttis % config.ttis_per_frame != 0:
+        raise ValueError("dataset_ttis must be divisible by ttis_per_frame")
+    return config.dataset_ttis // config.ttis_per_frame
+
+
+def paper_dataset_split_frame_counts(config: PaperFigure6Config) -> Tuple[int, int]:
+    total_frames = paper_dataset_frame_count(config)
+    train_frames = int(total_frames * config.train_fraction)
+    return train_frames, total_frames - train_frames
+
+
+def paper_dataset_global_frame_index(config: PaperFigure6Config, *, split: str, index: int) -> int:
+    train_frames, validation_frames = paper_dataset_split_frame_counts(config)
+    if split == "train":
+        return index % train_frames
+    if split == "validation":
+        return train_frames + (index % validation_frames)
+    raise ValueError(f"split must be 'train' or 'validation', got {split!r}")
+
+
+def paper_dataset_iteration(config: PaperFigure6Config, *, split: str, index: int) -> int:
+    return paper_dataset_global_frame_index(config, split=split, index=index) + 1
+
+
+def sample_paper_dataset_parameters(
+    config: PaperFigure6Config,
+    *,
+    split: str,
+    index: int,
+    seed: int,
+    snr_db: float | None = None,
+    pilot_count: int | None = None,
+) -> OfficialParameters:
+    frame_index = paper_dataset_global_frame_index(config, split=split, index=index)
+    rng = random.Random(seed * 1_000_003 + frame_index)
+
+    if split == "train":
+        channels = config.train_channels
+        snr = rng.uniform(*config.snr_limits_db) if snr_db is None else snr_db
+        dmrs_additional_position = rng.randint(0, 1)
+    elif split == "validation":
+        channels = config.validation_channels
+        if snr_db is None:
+            raise ValueError("snr_db is required for validation dataset sampling")
+        if pilot_count is None:
+            raise ValueError("pilot_count is required for validation dataset sampling")
+        snr = snr_db
+        dmrs_additional_position = pilot_count_to_dmrs_additional_position(pilot_count)
+    else:
+        raise ValueError(f"split must be 'train' or 'validation', got {split!r}")
+
+    return OfficialParameters(
+        snr_db=float(snr),
+        channel_model=rng.choice(channels),
+        delay_spread_s=rng.uniform(*config.delay_spread_limits_s),
+        max_doppler_shift_hz=rng.uniform(*config.maximum_doppler_shift_limits_hz),
+        dmrs_additional_position=dmrs_additional_position,
+        dmrs_configuration_type=rng.randint(1, 2),
+    )
 
 
 def convert_official_batch_arrays(
@@ -194,6 +260,28 @@ class MatlabDeepRxBridge:
     ) -> float:
         self.start()
         results = self._engine.deeprx_evaluate_practical_lmmse(
+            str(self.paths.matlab_example_dir),
+            float(iteration),
+            float(parameters.snr_db),
+            parameters.channel_model,
+            float(parameters.delay_spread_s),
+            float(parameters.max_doppler_shift_hz),
+            float(parameters.dmrs_additional_position),
+            float(parameters.dmrs_configuration_type),
+            float(n_frames),
+            nargout=1,
+        )
+        return float(_matlab_struct_field(results, "UncodedBER"))
+
+    def evaluate_known_channel_lmmse(
+        self,
+        parameters: OfficialParameters,
+        *,
+        iteration: int,
+        n_frames: int = 1,
+    ) -> float:
+        self.start()
+        results = self._engine.deeprx_evaluate_known_channel_lmmse(
             str(self.paths.matlab_example_dir),
             float(iteration),
             float(parameters.snr_db),

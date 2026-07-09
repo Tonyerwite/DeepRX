@@ -2,23 +2,18 @@
 
 PyTorch reproduction scaffold for **"DeepRx: Fully Convolutional Deep Learning Receiver"** by Honkala, Korpi, and Huttunen.
 
-This project was built from three sources in the parent workspace:
-
-- `DeepRx_Fully_Convolutional_Deep_Learning_Receiver.pdf`
-- MathWorks AI-native fully convolutional receiver examples copied under `../参考代码/matlab`
-- The PyTorch reference under `../参考代码/DeepRx-OFDM-PyTorch-main`
+This project is the cleaned official-chain reproduction for **"DeepRx: Fully Convolutional Deep Learning Receiver"** by Honkala, Korpi, and Huttunen.
 
 ## What Is Implemented
 
-- DeepRx Table I network: 11 preactivation ResNet blocks, depthwise separable convolutions, dilation schedule `(1,1), (2,3), (3,6)`, and about 1.23M trainable parameters.
+- MathWorks-compatible PyTorch DeepRx network: 11 preactivation ResNet blocks, depthwise separable convolutions, dilation schedule `(1,1), (2,3), (3,6)`, and exactly 1,232,516 trainable parameters for the 16QAM/four-bit model.
 - Paper/MathWorks input construction: `rxGrid + DM-RS grid + raw LS channel estimate`, converted from complex values into 10 real-valued channels for `Nrx=2`.
 - QPSK/16QAM/64QAM/256QAM Gray-labelled modem with positive logits meaning bit `1`.
-- OFDM grid modulation/demodulation with the MathWorks default tensor size `[312, 14, 10] -> [312, 14, 4]` for 16QAM.
-- Online data generation with randomized SNR, Doppler, channel profile, and DM-RS pattern.
-- Conventional baseline: LS channel estimation, interpolation, SIMO LMMSE equalization, and max-log LLR demapping.
-- Quick reproduction script that trains briefly and writes BER figures plus `metrics.json`.
+- Official MATLAB/5G Toolbox/6G Exploration Library bridge for PUSCH, DM-RS, LDPC, TDL/CDL channels, practical LMMSE evaluation, and PyTorch DeepRx coexecution.
+- Online PyTorch training from MATLAB-generated official batches.
+- Paper Fig. 6(a) reproduction script for **DeepRx vs practical LMMSE uncoded BER**, with 1-pilot and 2-pilot curves over `0:3:21` dB SINR.
 
-The pure Python channel models are compact TDL/CDL approximations. They preserve the paper workflow and tensor interfaces, but they are not a bit-exact replacement for MATLAB 5G Toolbox / 6G Exploration Library CDL, LDPC, and PUSCH processing. Use `scripts/train_paper_config.py` for long 312-subcarrier training; exact paper curves require long training and a standards-grade channel/coding stack.
+For paper-level results, use only `scripts/train_official_matlab.py` and `scripts/reproduce_figure6a.py`. The removed pure Python runner scripts used compact channel approximations and were not the paper reproduction path.
 
 ## VSCode Setup
 
@@ -34,6 +29,12 @@ For this machine's NVIDIA GPU, install the CUDA 12.8 PyTorch wheel:
 .\.venv\Scripts\python.exe -m pip install -r requirements-cuda.txt
 ```
 
+Install the MATLAB Engine into the same venv from the local R2025b install:
+
+```powershell
+.\.venv\Scripts\python.exe -m pip install "D:\Program Files\MATLAB\R2025b\extern\engines\python"
+```
+
 In VSCode, choose interpreter:
 
 ```text
@@ -46,57 +47,61 @@ C:\Users\Chen Yan\Desktop\AI receiver\论文复现\DeepRx\.venv\Scripts\python.e
 .\.venv\Scripts\python.exe -m pytest -q
 ```
 
-Expected result: `14 passed`.
+Expected result: `10 passed`.
 
-## Quick Reproduction
+## Official Paper Reproduction
+
+Run a quick official-chain sanity check over one SINR point:
 
 ```powershell
-.\.venv\Scripts\python.exe scripts\quick_reproduce.py --output-dir outputs\quick_reproduction --train-steps 3 --eval-batches 2 --batch-size 2 --device cuda
+.\.venv\Scripts\python.exe scripts\reproduce_figure6a.py --snr-points 0 --samples-per-point 1 --n-frames 1 --output-dir outputs\figure6a_smoke
+```
+
+Run the current full Fig. 6(a) reproduction grid:
+
+```powershell
+.\.venv\Scripts\python.exe scripts\reproduce_figure6a.py --samples-per-point 3 --n-frames 1 --output-dir outputs\figure6a
 ```
 
 Outputs:
 
-- `outputs/quick_reproduction/metrics.json`
-- `outputs/quick_reproduction/ber_vs_snr.png`
-- `outputs/quick_reproduction/ber_vs_doppler.png`
+- `outputs/figure6a/figure6a_metrics.json`
+- `outputs/figure6a/figure6a_uncoded_ber.png`
 
-By default the SNR grid is `0:2:12` dB. This command is a smoke test. With only a few training steps, DeepRx should not be expected to beat LMMSE; the output file marks this as `mode: smoke`.
-
-## Paper-Size Training
-
-This uses the 312-subcarrier, 14-symbol, 2-RX-antenna tensor dimensions and the paper-style online generator:
+The default checkpoint is the official MathWorks PyTorch `deeprx_30k.pth`. To evaluate a model trained by this project, pass the MATLAB-loadable state dictionary:
 
 ```powershell
-.\.venv\Scripts\python.exe scripts\train_paper_config.py --steps 30000 --batch-size 20 --device cuda --save-every 1000 --log-every 10 --output checkpoints\deeprx_paper_config.pt
+.\.venv\Scripts\python.exe scripts\reproduce_figure6a.py --checkpoint checkpoints\deeprx_official_matlab_state_dict.pth --samples-per-point 3 --n-frames 1 --output-dir outputs\figure6a_custom
 ```
 
-For CPU-only testing, reduce the step count:
+## Official MATLAB-Generated Training
+
+Train PyTorch using MATLAB/5G Toolbox generated PUSCH batches:
 
 ```powershell
-.\.venv\Scripts\python.exe scripts\train_paper_config.py --steps 10 --batch-size 1 --device cpu
+.\.venv\Scripts\python.exe scripts\train_official_matlab.py --device cuda --output checkpoints\deeprx_official_matlab.pt --save-every 500 --log-every 10
 ```
 
-The default `--max-bits 4` matches the MathWorks 16QAM PyTorch example output shape `[312,14,4]`. Use `--max-bits 8` for the paper/reference-code multi-modulation masking setup.
+The defaults match the paper-scale training setup: `30000` iterations, `8` MATLAB frames per step (`80` TTIs), LAMB optimizer, learning rate `1e-2`, weight decay `1e-4`, 800-step warmup, and linear decay after 30% of training.
 
-The script stores model, optimizer, args, and logged history in the checkpoint, so a long run leaves recoverable progress every `--save-every` steps.
-
-After training, evaluate a checkpoint at `0:2:12` dB:
+For a quick hardware sanity check, override the batch size and step count:
 
 ```powershell
-.\.venv\Scripts\python.exe scripts\evaluate_checkpoint.py --checkpoint checkpoints\deeprx_paper_config.pt --output-dir outputs\checkpoint_eval --device cuda --snr-start 0 --snr-stop 12 --snr-step 2 --eval-samples 20 --max-bits 4
+.\.venv\Scripts\python.exe scripts\train_official_matlab.py --steps 1 --n-frames 1 --device cuda --output outputs\train_sanity.pt
 ```
 
-Outputs:
+The script saves both:
 
-- `outputs/checkpoint_eval/checkpoint_metrics.json`
-- `outputs/checkpoint_eval/checkpoint_ber_vs_snr.png`
+- `checkpoints/deeprx_official_matlab.pt`: full training checkpoint with optimizer/history
+- `checkpoints/deeprx_official_matlab_state_dict.pth`: pure PyTorch state dict for MATLAB coexecution evaluation
 
 ## Important Files
 
 - `src/deeprx/model.py`: DeepRx architecture, input construction, loss, BER.
-- `src/deeprx/ofdm.py`: OFDM front end and compact fading channel models.
-- `src/deeprx/data.py`: online training/evaluation sample generator.
-- `src/deeprx/receiver.py`: LMMSE baseline.
-- `src/deeprx/experiments.py`: quick reproduction and plotting.
-- `scripts/evaluate_checkpoint.py`: checkpoint evaluation over `0:2:12` dB by default.
+- `src/deeprx/matlab_bridge.py`: Python wrapper around MATLAB Engine and official MathWorks helper functions.
+- `src/deeprx/official_experiments.py`: Fig. 6(a) official-chain evaluation and plotting.
+- `matlab/`: MATLAB runtime helpers and wrappers for official PUSCH generation/evaluation.
+- `official/`: PyTorch coexecution helper files and official `deeprx_30k.pth` checkpoint.
+- `scripts/train_official_matlab.py`: PyTorch training from MATLAB-generated official batches.
+- `scripts/reproduce_figure6a.py`: DeepRx vs practical LMMSE uncoded BER reproduction for paper Fig. 6(a).
 - `tests/`: regression tests for the reproduction-critical behavior.

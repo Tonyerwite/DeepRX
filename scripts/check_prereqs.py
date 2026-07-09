@@ -7,6 +7,8 @@ from typing import Dict, Iterable, Optional
 
 ROOT = Path(__file__).resolve().parents[1]
 PATHS = ROOT / "config" / "deeprx_paths.json"
+MATLAB_DIR = ROOT / "matlab"
+OFFICIAL_DIR = ROOT / "official"
 
 
 @dataclass(frozen=True)
@@ -25,22 +27,38 @@ def _path_check(name: str, raw_path: str) -> PathCheck:
 
 
 def iter_configured_path_checks(data: Dict) -> Iterable[PathCheck]:
-    assets = data["mathworks_assets"]
-
     yield _path_check("MATLAB R2025b executable", data["matlab"]["r2025b_executable"])
     yield _path_check("Python venv executable", data["python"]["venv_python"])
-    yield _path_check("6G support package path", assets["six_g_support_package_path"])
-    yield _path_check("Official example root", assets["official_example_root"])
-    yield _path_check("Official MATLAB DeepRx example dir", assets["matlab_deeprx_example_dir"])
-    yield _path_check("Official PyTorch coexecution example dir", assets["pytorch_coexecution_example_dir"])
-    yield _path_check("Official DeepRx_2M.mat", assets["deep_rx_2m_mat"])
-    yield _path_check("Official deeprx_30k.pth", assets["deeprx_30k_pth"])
+    yield _path_check("6G support package path", data["matlab_support"]["six_g_support_package_path"])
+    yield PathCheck("MATLAB helper dir", MATLAB_DIR, MATLAB_DIR.exists())
+    yield PathCheck("Official PyTorch coexecution dir", OFFICIAL_DIR, OFFICIAL_DIR.exists())
+    yield PathCheck("Official deeprx_30k.pth", OFFICIAL_DIR / "deeprx_30k.pth", (OFFICIAL_DIR / "deeprx_30k.pth").exists(), (OFFICIAL_DIR / "deeprx_30k.pth").stat().st_size if (OFFICIAL_DIR / "deeprx_30k.pth").is_file() else None)
 
-    for raw_path in assets.get("official_matlab_helper_files", []):
-        yield _path_check(f"Official MATLAB helper file: {Path(raw_path).name}", raw_path)
+    matlab_files = [
+        "HARQEntity.m",
+        "hGetAdditionalSystemParameters.m",
+        "hGetFeaturesAndLabels.m",
+        "deeprx_build_paper_sim_parameters.m",
+        "deeprx_export_official_batch.m",
+        "deeprx_evaluate_practical_lmmse.m",
+        "deeprx_evaluate_pytorch_deeprx.m",
+        "requirements_6GVerify_project.txt",
+    ]
+    for name in matlab_files:
+        path = MATLAB_DIR / name
+        yield PathCheck(f"MATLAB runtime file: {name}", path, path.exists(), path.stat().st_size if path.is_file() else None)
 
-    for raw_path in assets.get("official_pytorch_files", []):
-        yield _path_check(f"Official PyTorch reference file: {Path(raw_path).name}", raw_path)
+    official_files = [
+        "deeprx.py",
+        "deeprx_model.py",
+        "hCreateTorchDeepRx.m",
+        "helperLibraryChecker.m",
+        "helperSetupPyenv.m",
+        "helperinstalledlibs.py",
+    ]
+    for name in official_files:
+        path = OFFICIAL_DIR / name
+        yield PathCheck(f"Official PyTorch runtime file: {name}", path, path.exists(), path.stat().st_size if path.is_file() else None)
 
 
 def _print_path_checks(data: Dict) -> int:

@@ -63,6 +63,7 @@ weights/
 *.ckpt
 *.pt
 *.pth
+!official/deeprx_30k.pth
 *.onnx
 *.h5
 *.hdf5
@@ -74,6 +75,3 @@ weights/
 *.tgz
 *.rar
 *.7z
-
-# Vendor installers/examples downloaded locally from official sites
-vendor/mathworks/

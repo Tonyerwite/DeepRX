@@ -1,5 +1,4 @@
-import math
-from typing import Iterable, Tuple
+from typing import Tuple
 
 import torch
 import torch.nn as nn
@@ -25,114 +24,73 @@ def create_bit_mask(modulation: str, max_bits: int = 8, device: str = "cpu") -> 
     return mask
 
 
-def create_pilot_mask(
-    n_symbols: int = 14,
-    n_subcarriers: int = 312,
-    config: str = "2_pilots_left",
-    device: str = "cpu",
-) -> torch.Tensor:
-    aliases = {
-        "1_pilot_A": "1_pilot_left",
-        "1_pilot_B": "1_pilot_right",
-        "2_pilots_A": "2_pilots_left",
-        "2_pilots_B": "2_pilots_right",
-    }
-    config = aliases.get(config, config)
-    mask = torch.zeros(1, 1, n_symbols, n_subcarriers, device=device)
-    if config == "1_pilot_left":
-        mask[0, 0, 2, 0::2] = 1.0
-    elif config == "1_pilot_right":
-        mask[0, 0, 2, 1::2] = 1.0
-    elif config == "2_pilots_left":
-        mask[0, 0, 2, 0::2] = 1.0
-        mask[0, 0, 11, 1::2] = 1.0
-    elif config == "2_pilots_right":
-        mask[0, 0, 2, 1::2] = 1.0
-        mask[0, 0, 11, 0::2] = 1.0
-    else:
-        raise ValueError(f"Unknown pilot config: {config}")
-    return mask
-
-
-def generate_qpsk_pilots(
-    batch_size: int,
-    n_symbols: int,
-    n_subcarriers: int,
-    pilot_mask: torch.Tensor,
-    device: str = "cpu",
-) -> torch.Tensor:
-    real = 2.0 * torch.randint(0, 2, (batch_size, 1, n_symbols, n_subcarriers), device=device).float() - 1.0
-    imag = 2.0 * torch.randint(0, 2, (batch_size, 1, n_symbols, n_subcarriers), device=device).float() - 1.0
-    pilots = torch.complex(real, imag) / math.sqrt(2.0)
-    return pilots * pilot_mask.to(device)
-
-
-def build_deeprx_input(rx_grid: torch.Tensor, tx_pilots: torch.Tensor) -> torch.Tensor:
-    if rx_grid.dtype not in (torch.complex64, torch.complex128):
-        raise TypeError("rx_grid must be complex")
-    n_rx = rx_grid.shape[1]
-    pilots_expanded = tx_pilots.expand(-1, n_rx, -1, -1)
-    raw_channel_estimate = rx_grid * torch.conj(pilots_expanded)
-    z_complex = torch.cat([rx_grid, tx_pilots, raw_channel_estimate], dim=1)
-    return torch.cat([z_complex.real, z_complex.imag], dim=1).float()
-
-
-class DepthwiseSeparableConv2d(nn.Module):
+class MathWorksResidualBlock(nn.Module):
     def __init__(
         self,
-        in_channels: int,
-        out_channels: int,
-        kernel_size: Tuple[int, int] = (3, 3),
-        dilation: Tuple[int, int] = (1, 1),
-        depth_multiplier: int = 2,
+        idx: int,
+        channels: Tuple[int, ...],
+        dilations: Tuple[Tuple[int, int], ...],
+        is_projection: bool = False,
     ):
         super().__init__()
-        mid_channels = in_channels * depth_multiplier
-        padding = (
-            dilation[0] * (kernel_size[0] - 1) // 2,
-            dilation[1] * (kernel_size[1] - 1) // 2,
+        in_channel = channels[idx - 1]
+        prev_channel = channels[idx - 2] if is_projection else in_channel
+        dilation_factor = dilations[idx - 1]
+
+        self.relu = nn.ReLU()
+        self.relu_res = nn.ReLU()
+        self.bn = nn.BatchNorm2d(in_channel)
+        self.bn_res = nn.BatchNorm2d(prev_channel)
+        self.conv1_3x3sep = nn.Conv2d(
+            prev_channel,
+            2 * prev_channel,
+            kernel_size=3,
+            groups=prev_channel,
+            dilation=dilation_factor,
+            stride=1,
+            padding="same",
         )
-        self.depthwise = nn.Conv2d(
-            in_channels,
-            mid_channels,
-            kernel_size=kernel_size,
-            padding=padding,
-            dilation=dilation,
-            groups=in_channels,
-            bias=False,
+        self.conv2_1x1 = nn.Conv2d(2 * prev_channel, in_channel, kernel_size=1, stride=1, padding=0)
+        self.conv3_3x3sep = nn.Conv2d(
+            in_channel,
+            2 * in_channel,
+            kernel_size=3,
+            groups=in_channel,
+            dilation=dilation_factor,
+            stride=1,
+            padding="same",
         )
-        self.pointwise = nn.Conv2d(mid_channels, out_channels, kernel_size=1, bias=False)
+        self.conv4_1x1 = nn.Conv2d(2 * in_channel, in_channel, kernel_size=1, stride=1, padding=0)
+        self.projection = is_projection
+        if self.projection:
+            self.shortcut = nn.Conv2d(prev_channel, in_channel, kernel_size=1, stride=1, padding=0)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        return self.pointwise(self.depthwise(x))
-
-
-class PreactivationResNetBlock(nn.Module):
-    def __init__(
-        self,
-        in_channels: int,
-        out_channels: int,
-        dilation: Tuple[int, int],
-        depth_multiplier: int = 2,
-    ):
-        super().__init__()
-        self.bn1 = nn.BatchNorm2d(in_channels)
-        self.conv1 = DepthwiseSeparableConv2d(in_channels, out_channels, dilation=dilation, depth_multiplier=depth_multiplier)
-        self.bn2 = nn.BatchNorm2d(out_channels)
-        self.conv2 = DepthwiseSeparableConv2d(out_channels, out_channels, dilation=dilation, depth_multiplier=depth_multiplier)
-        self.projection = None
-        if in_channels != out_channels:
-            self.projection = nn.Conv2d(in_channels, out_channels, kernel_size=1, bias=False)
-
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-        identity = x if self.projection is None else self.projection(x)
-        out = self.conv1(F.relu(self.bn1(x)))
-        out = self.conv2(F.relu(self.bn2(out)))
-        return out + identity
+        if self.projection:
+            y = self.bn_res(x)
+            z = self.relu_res(y)
+            y = self.conv1_3x3sep(z)
+            y = self.conv2_1x1(y)
+            y = self.bn(y)
+            y = self.relu(y)
+            y = self.conv3_3x3sep(y)
+            y = self.conv4_1x1(y)
+            shortcut = self.shortcut(z)
+        else:
+            y = self.bn_res(x)
+            y = self.relu_res(y)
+            y = self.conv1_3x3sep(y)
+            y = self.conv2_1x1(y)
+            y = self.bn(y)
+            y = self.relu(y)
+            y = self.conv3_3x3sep(y)
+            y = self.conv4_1x1(y)
+            shortcut = x
+        return y + shortcut
 
 
 class DeepRx(nn.Module):
-    """Fully convolutional DeepRx network from Honkala et al. Table I."""
+    """MathWorks-compatible PyTorch DeepRx network for the Honkala et al. receiver."""
 
     block_configs = (
         (64, (1, 1)),
@@ -150,37 +108,47 @@ class DeepRx(nn.Module):
 
     def __init__(self, n_rx_antennas: int = 2, max_bits_per_symbol: int = 8, depth_multiplier: int = 2):
         super().__init__()
+        if depth_multiplier != 2:
+            raise ValueError("The MathWorks-compatible DeepRx uses depth_multiplier=2.")
         self.n_rx_antennas = n_rx_antennas
         self.n_rx = n_rx_antennas
         self.max_bits_per_symbol = max_bits_per_symbol
         n_input_channels = 2 * (2 * n_rx_antennas + 1)
+        channels = tuple(out_channels for out_channels, _ in self.block_configs)
+        dilations = tuple(dilation for _, dilation in self.block_configs)
 
-        self.conv_in = nn.Conv2d(n_input_channels, 64, kernel_size=3, padding=1, bias=False)
-        blocks = []
-        in_channels = 64
-        for out_channels, dilation in self.block_configs:
-            blocks.append(PreactivationResNetBlock(in_channels, out_channels, dilation, depth_multiplier))
-            in_channels = out_channels
-        self.blocks = nn.ModuleList(blocks)
-        self.bn_out = nn.BatchNorm2d(in_channels)
-        self.conv_out = nn.Conv2d(in_channels, max_bits_per_symbol, kernel_size=3, padding=1, bias=True)
-        self.reset_parameters()
-
-    def reset_parameters(self) -> None:
-        for module in self.modules():
-            if isinstance(module, nn.Conv2d):
-                nn.init.kaiming_normal_(module.weight, mode="fan_out", nonlinearity="relu")
-                if module.bias is not None:
-                    nn.init.zeros_(module.bias)
-            elif isinstance(module, nn.BatchNorm2d):
-                nn.init.ones_(module.weight)
-                nn.init.zeros_(module.bias)
+        self.conv_in = nn.Conv2d(n_input_channels, 64, kernel_size=3, stride=1, padding="same")
+        self.resnet_block_1 = MathWorksResidualBlock(1, channels, dilations, is_projection=False)
+        self.resnet_block_2 = MathWorksResidualBlock(2, channels, dilations, is_projection=False)
+        self.resnet_block_3 = MathWorksResidualBlock(3, channels, dilations, is_projection=True)
+        self.resnet_block_4 = MathWorksResidualBlock(4, channels, dilations, is_projection=False)
+        self.resnet_block_5 = MathWorksResidualBlock(5, channels, dilations, is_projection=True)
+        self.resnet_block_6 = MathWorksResidualBlock(6, channels, dilations, is_projection=False)
+        self.resnet_block_7 = MathWorksResidualBlock(7, channels, dilations, is_projection=False)
+        self.resnet_block_8 = MathWorksResidualBlock(8, channels, dilations, is_projection=True)
+        self.resnet_block_9 = MathWorksResidualBlock(9, channels, dilations, is_projection=False)
+        self.resnet_block_10 = MathWorksResidualBlock(10, channels, dilations, is_projection=True)
+        self.resnet_block_11 = MathWorksResidualBlock(11, channels, dilations, is_projection=False)
+        self.bn = nn.BatchNorm2d(64)
+        self.relu = nn.ReLU()
+        self.conv_out = nn.Conv2d(64, max_bits_per_symbol, kernel_size=1)
 
     def forward(self, z: torch.Tensor) -> torch.Tensor:
         out = self.conv_in(z)
-        for block in self.blocks:
-            out = block(out)
-        return self.conv_out(F.relu(self.bn_out(out)))
+        out = self.resnet_block_1(out)
+        out = self.resnet_block_2(out)
+        out = self.resnet_block_3(out)
+        out = self.resnet_block_4(out)
+        out = self.resnet_block_5(out)
+        out = self.resnet_block_6(out)
+        out = self.resnet_block_7(out)
+        out = self.resnet_block_8(out)
+        out = self.resnet_block_9(out)
+        out = self.resnet_block_10(out)
+        out = self.resnet_block_11(out)
+        out = self.bn(out)
+        out = self.relu(out)
+        return self.conv_out(out)
 
     def count_parameters(self) -> int:
         return sum(param.numel() for param in self.parameters() if param.requires_grad)

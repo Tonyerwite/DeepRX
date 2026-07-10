@@ -253,7 +253,7 @@ def _save_checkpoint(path, model, optimizer, step, args, history):
     output = Path(path)
     output.parent.mkdir(parents=True, exist_ok=True)
     state_dict_output = output.with_name(f"{output.stem}_state_dict.pth")
-    torch.save(
+    _atomic_torch_save(
         {
             "model_state_dict": model.state_dict(),
             "optimizer_state_dict": optimizer.state_dict(),
@@ -263,7 +263,18 @@ def _save_checkpoint(path, model, optimizer, step, args, history):
         },
         output,
     )
-    torch.save(model.state_dict(), state_dict_output)
+    _atomic_torch_save(model.state_dict(), state_dict_output)
+
+
+def _atomic_torch_save(value, path):
+    output = Path(path)
+    temporary = output.with_suffix(output.suffix + ".tmp")
+    try:
+        torch.save(value, temporary)
+        temporary.replace(output)
+    except Exception:
+        temporary.unlink(missing_ok=True)
+        raise
 
 
 if __name__ == "__main__":

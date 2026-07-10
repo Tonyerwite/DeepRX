@@ -20,6 +20,7 @@ def build_arg_parser():
     parser.add_argument("--n-frames", type=int, default=1)
     parser.add_argument("--seed", type=int, default=2026)
     parser.add_argument("--snr-points", default="", help="Comma-separated SNR/SINR points. Default: paper 0,3,...,21 dB.")
+    parser.add_argument("--restart", action="store_true", help="Discard matching saved progress and restart the evaluation.")
     return parser
 
 
@@ -38,6 +39,7 @@ def main():
         samples_per_point=args.samples_per_point,
         n_frames=args.n_frames,
         seed=args.seed,
+        restart=args.restart,
     )
     print(f"Wrote {Path(args.output_dir) / 'figure6a_metrics.json'}")
     print(f"Wrote {Path(args.output_dir) / 'figure6a_uncoded_ber.png'}")

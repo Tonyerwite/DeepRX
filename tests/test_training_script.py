@@ -2,6 +2,7 @@ import importlib.util
 import inspect
 from pathlib import Path
 
+import pytest
 import torch
 
 from deeprx.matlab_bridge import OfficialBatch, OfficialParameters
@@ -108,6 +109,24 @@ def test_lamb_optimizer_updates_parameter():
     optimizer.step()
 
     assert not torch.equal(before, param.detach())
+
+
+def test_atomic_checkpoint_save_preserves_previous_file_on_failure(tmp_path, monkeypatch):
+    train = _load_training_script()
+    output = tmp_path / "checkpoint.pt"
+    output.write_bytes(b"previous-checkpoint")
+
+    def fail_save(value, path):
+        Path(path).write_bytes(b"partial")
+        raise RuntimeError("simulated interruption")
+
+    monkeypatch.setattr(train.torch, "save", fail_save)
+
+    with pytest.raises(RuntimeError, match="simulated interruption"):
+        train._atomic_torch_save({"step": 10}, output)
+
+    assert output.read_bytes() == b"previous-checkpoint"
+    assert not output.with_suffix(output.suffix + ".tmp").exists()
 
 
 class _RecordingBridge:

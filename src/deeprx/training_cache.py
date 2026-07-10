@@ -40,6 +40,18 @@ class PaperTrainingCache:
         self._target_bits = np.load(self.cache_dir / CACHE_FILES["target_bits"], mmap_mode=mmap_mode)
         self._data_mask = np.load(self.cache_dir / CACHE_FILES["data_mask"], mmap_mode=mmap_mode)
         self._bit_mask = np.load(self.cache_dir / CACHE_FILES["bit_mask"], mmap_mode=mmap_mode)
+        for key, array in (
+            ("inputs", self._inputs),
+            ("target_bits", self._target_bits),
+            ("data_mask", self._data_mask),
+            ("bit_mask", self._bit_mask),
+        ):
+            expected_shape = tuple(metadata["shapes"][key])
+            if tuple(array.shape) != expected_shape or array.dtype != np.float32:
+                raise ValueError(
+                    f"Training cache {key} has shape/dtype {array.shape}/{array.dtype}, "
+                    f"expected {expected_shape}/float32"
+                )
 
     @classmethod
     def create(
@@ -256,20 +268,43 @@ def build_paper_training_cache(
     if total_frames > train_frames:
         raise ValueError(f"frame_count={total_frames} exceeds train split frame count {train_frames}")
 
-    first_batch = _generate_cache_frame(bridge, config, seed=seed, frame_index=0)
-    cache = PaperTrainingCache.create(
-        cache_dir,
-        config=config,
-        seed=seed,
-        frame_count=total_frames,
-        sample_batch=first_batch,
-        overwrite=overwrite,
-    )
-    cache.write_frame(0, first_batch)
-    cache.update_completed_frames(1)
-    _report_progress(progress_callback, 1, total_frames)
+    cache_path = Path(cache_dir)
+    metadata_path = cache_path / METADATA_FILE
+    if metadata_path.exists() and not overwrite:
+        cache = PaperTrainingCache.open(
+            cache_path,
+            config=config,
+            seed=seed,
+            require_complete=False,
+            writable=True,
+        )
+        if cache.frame_count != total_frames:
+            raise ValueError(
+                f"Existing cache frame_count={cache.frame_count} does not match requested frame_count={total_frames}"
+            )
+        if cache.metadata.get("complete", False):
+            _report_progress(progress_callback, total_frames, total_frames)
+            return cache
+        start_frame = cache.completed_frames
+        if start_frame < 0 or start_frame > total_frames:
+            raise ValueError(f"Invalid completed_frames={start_frame} in training cache metadata")
+    else:
+        first_batch = _generate_cache_frame(bridge, config, seed=seed, frame_index=0)
+        cache = PaperTrainingCache.create(
+            cache_path,
+            config=config,
+            seed=seed,
+            frame_count=total_frames,
+            sample_batch=first_batch,
+            overwrite=overwrite,
+        )
+        cache.write_frame(0, first_batch)
+        cache.flush()
+        cache.update_completed_frames(1)
+        _report_progress(progress_callback, 1, total_frames)
+        start_frame = 1
 
-    for frame_index in range(1, total_frames):
+    for frame_index in range(start_frame, total_frames):
         cache.write_frame(frame_index, _generate_cache_frame(bridge, config, seed=seed, frame_index=frame_index))
         if progress_every > 0 and (frame_index + 1) % progress_every == 0:
             cache.flush()
@@ -331,7 +366,10 @@ def _config_payload(config: PaperFigure6Config) -> dict:
 
 
 def _write_metadata(cache_dir: Path, metadata: dict) -> None:
-    (cache_dir / METADATA_FILE).write_text(json.dumps(metadata, indent=2), encoding="utf-8")
+    path = cache_dir / METADATA_FILE
+    temporary = path.with_suffix(path.suffix + ".tmp")
+    temporary.write_text(json.dumps(metadata, indent=2), encoding="utf-8")
+    temporary.replace(path)
 
 
 def _to_float32_numpy(tensor: torch.Tensor) -> np.ndarray:

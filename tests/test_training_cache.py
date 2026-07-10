@@ -7,6 +7,7 @@ from deeprx.matlab_bridge import OfficialBatch, PaperFigure6Config
 from deeprx.training_cache import (
     CachedPaperTrainingStepDataset,
     PaperTrainingCache,
+    build_paper_training_cache,
     cached_paper_training_batch_iterator,
 )
 
@@ -108,6 +109,41 @@ def test_cached_training_batch_iterator_yields_official_batches(tmp_path):
     assert torch.equal(batch.inputs[10:], _frame_batch(1).inputs)
 
 
+def test_cache_builder_resumes_from_last_flushed_frame(tmp_path):
+    config = PaperFigure6Config()
+    cache = PaperTrainingCache.create(
+        tmp_path,
+        config=config,
+        seed=2026,
+        frame_count=4,
+        sample_batch=_frame_batch(0),
+        overwrite=True,
+    )
+    cache.write_frame(0, _frame_batch(0))
+    cache.write_frame(1, _frame_batch(1))
+    cache.flush()
+    cache.update_completed_frames(2)
+    bridge = _RecordingCacheBridge()
+
+    resumed = build_paper_training_cache(
+        bridge,
+        tmp_path,
+        config=config,
+        seed=2026,
+        frame_count=4,
+        progress_every=1,
+    )
+
+    assert bridge.iterations == [3, 4]
+    assert resumed.metadata["complete"] is True
+    assert resumed.completed_frames == 4
+    batch = resumed.read_frames([0, 1, 2, 3])
+    assert torch.equal(batch.inputs[:10], _frame_batch(0).inputs)
+    assert torch.equal(batch.inputs[10:20], _frame_batch(1).inputs)
+    assert torch.equal(batch.inputs[20:30], _frame_batch(2).inputs)
+    assert torch.equal(batch.inputs[30:], _frame_batch(3).inputs)
+
+
 def _frame_batch(frame_index: int) -> OfficialBatch:
     return OfficialBatch(
         inputs=torch.full((10, 2, 3, 4), float(frame_index), dtype=torch.float32),
@@ -115,3 +151,12 @@ def _frame_batch(frame_index: int) -> OfficialBatch:
         data_mask=torch.ones((10, 1, 3, 4), dtype=torch.float32) * float(frame_index + 1),
         bit_mask=torch.ones((1, 4, 1, 1), dtype=torch.float32),
     )
+
+
+class _RecordingCacheBridge:
+    def __init__(self):
+        self.iterations = []
+
+    def generate_training_batch(self, parameters, *, iteration: int, n_frames: int):
+        self.iterations.append(iteration)
+        return _frame_batch(iteration - 1)

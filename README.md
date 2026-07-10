@@ -47,7 +47,7 @@ C:\Users\Chen Yan\Desktop\AI receiver\论文复现\DeepRx\.venv\Scripts\python.e
 .\.venv\Scripts\python.exe -m pytest -q
 ```
 
-Expected result: `25 passed`.
+Expected result: `28 passed`.
 
 ## Official Paper Reproduction
 
@@ -89,10 +89,12 @@ The script uses a deterministic online paper-dataset model rather than a materia
 To avoid regenerating the same deterministic train frames during every epoch-like pass, first materialize the fixed train split as a memory-mapped cache:
 
 ```powershell
-.\.venv\Scripts\python.exe scripts\build_training_cache.py --overwrite
+.\.venv\Scripts\python.exe scripts\build_training_cache.py
 ```
 
 By default this creates the paper train split cache at `D:\DeepRxCache\paper_train_cache`: `30000` frames, `10` TTIs per frame. The cache stores the exact MATLAB-generated `inputs`, `target_bits`, `data_mask`, and `bit_mask` tensors as `float32` `.npy` memmaps plus metadata. This is a long data-generation job, but it is run once.
+
+Cache generation flushes data and atomically records progress every 100 frames. If generation is interrupted, run the same command again to resume from the last recorded frame. Use `--overwrite` only when intentionally discarding the existing cache and starting again.
 
 Train from the fixed cache with the same paper step order:
 
@@ -101,6 +103,14 @@ Train from the fixed cache with the same paper step order:
 ```
 
 With `--cache-dir`, training step `k` reads frames `k*8 ... k*8+7` modulo the cached train-frame count, so the `80` TTI batch composition, seed, frame index order, optimizer, loss, and LR schedule stay aligned with the online MATLAB path. Omit `--cache-dir` to use the original online MATLAB generation path.
+
+Training checkpoints are saved atomically, so an interrupted write preserves the previous valid checkpoint. Resume the same 30k run with:
+
+```powershell
+.\.venv\Scripts\python.exe scripts\train_official_matlab.py --device cuda --cache-dir "D:\DeepRxCache\paper_train_cache" --output checkpoints\deeprx_official_matlab.pt --resume checkpoints\deeprx_official_matlab.pt --save-every 500 --log-every 10
+```
+
+Fig. 6(a) evaluation saves `figure6a_progress.json` after every completed SNR point and automatically resumes matching runs. Pass `--restart` only to discard saved evaluation progress.
 
 For a quick hardware sanity check, override the batch size and step count:
 

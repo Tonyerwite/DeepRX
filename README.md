@@ -47,7 +47,7 @@ C:\Users\Chen Yan\Desktop\AI receiver\论文复现\DeepRx\.venv\Scripts\python.e
 .\.venv\Scripts\python.exe -m pytest -q
 ```
 
-Expected result: `24 passed`.
+Expected result: `25 passed`.
 
 ## Official Paper Reproduction
 
@@ -89,15 +89,15 @@ The script uses a deterministic online paper-dataset model rather than a materia
 To avoid regenerating the same deterministic train frames during every epoch-like pass, first materialize the fixed train split as a memory-mapped cache:
 
 ```powershell
-.\.venv\Scripts\python.exe scripts\build_training_cache.py --cache-dir data\paper_train_cache --overwrite
+.\.venv\Scripts\python.exe scripts\build_training_cache.py --overwrite
 ```
 
-By default this creates the paper train split cache: `30000` frames, `10` TTIs per frame. The cache stores the exact MATLAB-generated `inputs`, `target_bits`, `data_mask`, and `bit_mask` tensors as `float32` `.npy` memmaps plus metadata. This is a long data-generation job, but it is run once.
+By default this creates the paper train split cache at `D:\DeepRxCache\paper_train_cache`: `30000` frames, `10` TTIs per frame. The cache stores the exact MATLAB-generated `inputs`, `target_bits`, `data_mask`, and `bit_mask` tensors as `float32` `.npy` memmaps plus metadata. This is a long data-generation job, but it is run once.
 
 Train from the fixed cache with the same paper step order:
 
 ```powershell
-.\.venv\Scripts\python.exe scripts\train_official_matlab.py --device cuda --cache-dir data\paper_train_cache --output checkpoints\deeprx_official_matlab.pt --save-every 500 --log-every 10
+.\.venv\Scripts\python.exe scripts\train_official_matlab.py --device cuda --cache-dir "D:\DeepRxCache\paper_train_cache" --output checkpoints\deeprx_official_matlab.pt --save-every 500 --log-every 10
 ```
 
 With `--cache-dir`, training step `k` reads frames `k*8 ... k*8+7` modulo the cached train-frame count, so the `80` TTI batch composition, seed, frame index order, optimizer, loss, and LR schedule stay aligned with the online MATLAB path. Omit `--cache-dir` to use the original online MATLAB generation path.

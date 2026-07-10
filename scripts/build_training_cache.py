@@ -11,9 +11,12 @@ from deeprx.matlab_bridge import MatlabDeepRxBridge, PaperFigure6Config, paper_d
 from deeprx.training_cache import build_paper_training_cache
 
 
+DEFAULT_CACHE_DIR = r"D:\DeepRxCache\paper_train_cache"
+
+
 def build_arg_parser():
     parser = argparse.ArgumentParser(description="Build the fixed MATLAB-generated DeepRx train-frame cache.")
-    parser.add_argument("--cache-dir", default="data/paper_train_cache")
+    parser.add_argument("--cache-dir", default=DEFAULT_CACHE_DIR)
     parser.add_argument("--frame-count", type=int, default=0, help="Train frames to cache. Default 0 means the full paper train split.")
     parser.add_argument("--seed", type=int, default=2026)
     parser.add_argument("--overwrite", action="store_true")

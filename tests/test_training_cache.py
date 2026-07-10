@@ -1,3 +1,6 @@
+import importlib.util
+from pathlib import Path
+
 import torch
 
 from deeprx.matlab_bridge import OfficialBatch, PaperFigure6Config
@@ -6,6 +9,20 @@ from deeprx.training_cache import (
     PaperTrainingCache,
     cached_paper_training_batch_iterator,
 )
+
+
+ROOT = Path(__file__).resolve().parents[1]
+
+
+def test_training_cache_builder_defaults_to_d_drive():
+    script = ROOT / "scripts" / "build_training_cache.py"
+    spec = importlib.util.spec_from_file_location("build_training_cache", script)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+
+    args = module.build_arg_parser().parse_args([])
+
+    assert args.cache_dir == r"D:\DeepRxCache\paper_train_cache"
 
 
 def test_paper_training_cache_reads_steps_in_online_frame_order(tmp_path):

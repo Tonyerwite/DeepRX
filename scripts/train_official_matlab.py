@@ -19,6 +19,7 @@ from deeprx.matlab_bridge import (
     sample_paper_dataset_parameters,
 )
 from deeprx.model import DeepRx, DeepRxLoss, compute_ber
+from deeprx.training_cache import cached_paper_training_batch_iterator
 
 
 class Lamb(torch.optim.Optimizer):
@@ -101,6 +102,9 @@ def build_arg_parser():
     parser.add_argument("--seed", type=int, default=2026)
     parser.add_argument("--log-every", type=int, default=10)
     parser.add_argument("--save-every", type=int, default=500)
+    parser.add_argument("--cache-dir", default="", help="Optional fixed train-frame cache produced by scripts/build_training_cache.py.")
+    parser.add_argument("--cache-workers", type=int, default=0)
+    parser.add_argument("--cache-pin-memory", action="store_true")
     return parser
 
 
@@ -154,41 +158,22 @@ def main():
         start_step = int(checkpoint.get("steps", 0))
 
     config = PaperFigure6Config()
-    with MatlabDeepRxBridge() as bridge:
-        for step in range(start_step, args.steps):
-            lr = paper_learning_rate(
-                step,
-                total_steps=args.steps,
-                base_lr=args.lr,
-                warmup_steps=args.warmup_steps,
-                decay_start_fraction=args.decay_start_fraction,
-            )
-            _set_optimizer_lr(optimizer, lr)
-            frame_specs = paper_training_frame_specs(config, step=step, n_frames=args.n_frames, seed=args.seed)
-            batch = generate_paper_training_batch(bridge, config, rng, step=step, n_frames=args.n_frames, seed=args.seed)
-            inputs = batch.inputs.to(device)
-            targets = batch.target_bits.to(device)
-            data_mask = batch.data_mask.to(device)
-            bit_mask = batch.bit_mask.to(device)
-
-            model.train()
-            optimizer.zero_grad(set_to_none=True)
-            logits = model(inputs)
-            loss = criterion(logits, targets, data_mask, bit_mask)
-            loss.backward()
-            optimizer.step()
-
-            if step % args.log_every == 0:
-                params = frame_specs[0][0]
-                ber = compute_ber(logits.detach(), targets, data_mask, bit_mask)
-                history["step"].append(step)
-                history["loss"].append(float(loss.detach().cpu()))
-                history["ber"].append(float(ber))
-                history["lr"].append(float(lr))
-                print(f"step={step:06d} loss={loss.item():.5f} ber={ber:.5f} lr={lr:.3e} snr={params.snr_db:+.2f} channel={params.channel_model}")
-
-            if args.save_every > 0 and (step + 1) % args.save_every == 0:
-                _save_checkpoint(args.output, model, optimizer, step + 1, args, history)
+    if args.cache_dir:
+        batch_iterator = cached_paper_training_batch_iterator(
+            args.cache_dir,
+            config=config,
+            seed=args.seed,
+            start_step=start_step,
+            end_step=args.steps,
+            n_frames=args.n_frames,
+            num_workers=args.cache_workers,
+            pin_memory=args.cache_pin_memory,
+        )
+        _train_from_batches(args, model, optimizer, criterion, config, device, history, batch_iterator)
+    else:
+        with MatlabDeepRxBridge() as bridge:
+            batch_iterator = _online_paper_training_batch_iterator(bridge, config, rng, args, start_step)
+            _train_from_batches(args, model, optimizer, criterion, config, device, history, batch_iterator)
 
     _save_checkpoint(args.output, model, optimizer, args.steps, args, history)
     print(f"Saved {args.output}")
@@ -206,6 +191,46 @@ def _make_optimizer(args, model):
     if args.optimizer == "adamw":
         return torch.optim.AdamW(model.parameters(), lr=args.lr, weight_decay=args.weight_decay)
     raise ValueError(f"Unsupported optimizer: {args.optimizer}")
+
+
+def _online_paper_training_batch_iterator(bridge, config, rng, args, start_step):
+    for step in range(start_step, args.steps):
+        yield step, generate_paper_training_batch(bridge, config, rng, step=step, n_frames=args.n_frames, seed=args.seed)
+
+
+def _train_from_batches(args, model, optimizer, criterion, config, device, history, batch_iterator):
+    for step, batch in batch_iterator:
+        lr = paper_learning_rate(
+            step,
+            total_steps=args.steps,
+            base_lr=args.lr,
+            warmup_steps=args.warmup_steps,
+            decay_start_fraction=args.decay_start_fraction,
+        )
+        _set_optimizer_lr(optimizer, lr)
+        inputs = batch.inputs.to(device)
+        targets = batch.target_bits.to(device)
+        data_mask = batch.data_mask.to(device)
+        bit_mask = batch.bit_mask.to(device)
+
+        model.train()
+        optimizer.zero_grad(set_to_none=True)
+        logits = model(inputs)
+        loss = criterion(logits, targets, data_mask, bit_mask)
+        loss.backward()
+        optimizer.step()
+
+        if step % args.log_every == 0:
+            params = paper_training_frame_specs(config, step=step, n_frames=args.n_frames, seed=args.seed)[0][0]
+            ber = compute_ber(logits.detach(), targets, data_mask, bit_mask)
+            history["step"].append(step)
+            history["loss"].append(float(loss.detach().cpu()))
+            history["ber"].append(float(ber))
+            history["lr"].append(float(lr))
+            print(f"step={step:06d} loss={loss.item():.5f} ber={ber:.5f} lr={lr:.3e} snr={params.snr_db:+.2f} channel={params.channel_model}")
+
+        if args.save_every > 0 and (step + 1) % args.save_every == 0:
+            _save_checkpoint(args.output, model, optimizer, step + 1, args, history)
 
 
 def _set_optimizer_lr(optimizer, lr):

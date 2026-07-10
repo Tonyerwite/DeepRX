@@ -47,7 +47,7 @@ C:\Users\Chen Yan\Desktop\AI receiver\论文复现\DeepRx\.venv\Scripts\python.e
 .\.venv\Scripts\python.exe -m pytest -q
 ```
 
-Expected result: `22 passed`.
+Expected result: `24 passed`.
 
 ## Official Paper Reproduction
 
@@ -85,6 +85,22 @@ Train PyTorch using MATLAB/5G Toolbox generated PUSCH batches:
 The defaults match the paper-scale training setup where the paper is explicit: `30000` iterations, `8` MATLAB frames per step (`80` TTIs), LAMB optimizer, learning rate `1e-2`, weight decay `1e-4`, 800-step warmup, and linear decay after 30% of training. The paper does not publish LAMB betas/epsilon, so this implementation exposes them explicitly and defaults to common LAMB values: `--lamb-beta1 0.9`, `--lamb-beta2 0.999`, and `--lamb-eps 1e-6`.
 
 The script uses a deterministic online paper-dataset model rather than a materialized copy of the authors' private dataset. It follows the described scale and split: `500000` TTIs, `10` TTIs per frame, `60%` training frames, `40%` validation frames, and one randomized channel/SNR/DM-RS draw per 10-TTI frame. The original dataset seed, frame order, and reuse policy were not published, so these generated frames should be described as aligned to the paper protocol, not bit-identical to the authors' dataset.
+
+To avoid regenerating the same deterministic train frames during every epoch-like pass, first materialize the fixed train split as a memory-mapped cache:
+
+```powershell
+.\.venv\Scripts\python.exe scripts\build_training_cache.py --cache-dir data\paper_train_cache --overwrite
+```
+
+By default this creates the paper train split cache: `30000` frames, `10` TTIs per frame. The cache stores the exact MATLAB-generated `inputs`, `target_bits`, `data_mask`, and `bit_mask` tensors as `float32` `.npy` memmaps plus metadata. This is a long data-generation job, but it is run once.
+
+Train from the fixed cache with the same paper step order:
+
+```powershell
+.\.venv\Scripts\python.exe scripts\train_official_matlab.py --device cuda --cache-dir data\paper_train_cache --output checkpoints\deeprx_official_matlab.pt --save-every 500 --log-every 10
+```
+
+With `--cache-dir`, training step `k` reads frames `k*8 ... k*8+7` modulo the cached train-frame count, so the `80` TTI batch composition, seed, frame index order, optimizer, loss, and LR schedule stay aligned with the online MATLAB path. Omit `--cache-dir` to use the original online MATLAB generation path.
 
 For a quick hardware sanity check, override the batch size and step count:
 

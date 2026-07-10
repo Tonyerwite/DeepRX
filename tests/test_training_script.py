@@ -32,6 +32,9 @@ def test_training_defaults_match_paper_scale():
     assert args.lamb_eps == 1e-6
     assert args.warmup_steps == 800
     assert args.decay_start_fraction == 0.3
+    assert args.cache_dir == ""
+    assert args.cache_workers == 0
+    assert args.cache_pin_memory is False
 
 
 def test_lamb_optimizer_uses_explicit_cli_hyperparameters():

@@ -11,7 +11,7 @@ from deeprx.matlab_bridge import MatlabDeepRxBridge, PaperFigure6Config, paper_d
 from deeprx.training_cache import build_paper_training_cache
 
 
-DEFAULT_CACHE_DIR = r"D:\DeepRxCache\paper_train_cache"
+DEFAULT_CACHE_DIR = str(ROOT / "data" / "paper_train_cache")
 
 
 def build_arg_parser():

@@ -1,9 +1,9 @@
 {
   "matlab": {
-    "r2025b_executable": "D:/Program Files/MATLAB/R2025b/bin/matlab.exe"
+    "r2025b_executable": "C:/Program Files/MATLAB/R2025b/bin/matlab.exe"
   },
   "python": {
-    "venv_python": "C:/Users/Chen Yan/Desktop/AI receiver/论文复现/DeepRx/.venv/Scripts/python.exe"
+    "venv_python": "C:/path/to/DeepRx/.venv/Scripts/python.exe"
   },
   "matlab_support": {
     "six_g_support_package_path": "C:/ProgramData/MATLAB/SupportPackages/R2025b/toolbox/5g/supportpackages/pre6g"

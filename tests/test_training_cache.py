@@ -1,6 +1,7 @@
 import importlib.util
 from pathlib import Path
 
+import numpy as np
 import torch
 
 from deeprx.matlab_bridge import OfficialBatch, PaperFigure6Config
@@ -15,7 +16,7 @@ from deeprx.training_cache import (
 ROOT = Path(__file__).resolve().parents[1]
 
 
-def test_training_cache_builder_defaults_to_d_drive():
+def test_training_cache_builder_defaults_to_repo_data_directory():
     script = ROOT / "scripts" / "build_training_cache.py"
     spec = importlib.util.spec_from_file_location("build_training_cache", script)
     module = importlib.util.module_from_spec(spec)
@@ -23,7 +24,7 @@ def test_training_cache_builder_defaults_to_d_drive():
 
     args = module.build_arg_parser().parse_args([])
 
-    assert args.cache_dir == r"D:\DeepRxCache\paper_train_cache"
+    assert Path(args.cache_dir) == ROOT / "data" / "paper_train_cache"
 
 
 def test_paper_training_cache_reads_steps_in_online_frame_order(tmp_path):
@@ -72,6 +73,31 @@ def test_paper_training_cache_reads_steps_in_online_frame_order(tmp_path):
     assert torch.equal(inputs2[:10], _frame_batch(0).inputs)
     assert torch.equal(inputs2[10:], _frame_batch(1).inputs)
     assert torch.equal(targets2[10:], _frame_batch(1).target_bits)
+
+
+def test_paper_training_cache_reads_contiguous_frames_without_concatenating(tmp_path, monkeypatch):
+    config = PaperFigure6Config()
+    cache = PaperTrainingCache.create(
+        tmp_path,
+        config=config,
+        seed=2026,
+        frame_count=4,
+        sample_batch=_frame_batch(0),
+        overwrite=True,
+    )
+    for frame_index in range(4):
+        cache.write_frame(frame_index, _frame_batch(frame_index))
+    cache.mark_complete()
+
+    def fail_concatenate(*args, **kwargs):
+        raise AssertionError("contiguous cache reads must not allocate through np.concatenate")
+
+    monkeypatch.setattr(np, "concatenate", fail_concatenate)
+    batch = cache.read_frames([1, 2])
+
+    assert batch.inputs.shape == (20, 2, 3, 4)
+    assert torch.equal(batch.inputs[:10], _frame_batch(1).inputs)
+    assert torch.equal(batch.inputs[10:], _frame_batch(2).inputs)
 
 
 def test_cached_training_batch_iterator_yields_official_batches(tmp_path):

@@ -141,9 +141,17 @@ class PaperTrainingCache:
         frame_indices = [int(index) % self.frame_count for index in indices]
         if not frame_indices:
             raise ValueError("At least one frame index is required")
-        inputs = np.concatenate([self._inputs[index] for index in frame_indices], axis=0)
-        target_bits = np.concatenate([self._target_bits[index] for index in frame_indices], axis=0)
-        data_mask = np.concatenate([self._data_mask[index] for index in frame_indices], axis=0)
+        first_index = frame_indices[0]
+        contiguous = frame_indices == list(range(first_index, first_index + len(frame_indices)))
+        if contiguous:
+            frame_slice = slice(first_index, first_index + len(frame_indices))
+            inputs = _flatten_frame_batch(self._inputs[frame_slice])
+            target_bits = _flatten_frame_batch(self._target_bits[frame_slice])
+            data_mask = _flatten_frame_batch(self._data_mask[frame_slice])
+        else:
+            inputs = np.concatenate([self._inputs[index] for index in frame_indices], axis=0)
+            target_bits = np.concatenate([self._target_bits[index] for index in frame_indices], axis=0)
+            data_mask = np.concatenate([self._data_mask[index] for index in frame_indices], axis=0)
         bit_mask = np.array(self._bit_mask, dtype=np.float32, copy=True)
         return OfficialBatch(
             inputs=torch.from_numpy(inputs),
@@ -165,6 +173,10 @@ class PaperTrainingCache:
     def flush(self) -> None:
         for array in (self._inputs, self._target_bits, self._data_mask, self._bit_mask):
             array.flush()
+
+
+def _flatten_frame_batch(array: np.ndarray) -> np.ndarray:
+    return array.reshape(array.shape[0] * array.shape[1], *array.shape[2:])
 
 
 class CachedPaperTrainingStepDataset(Dataset):

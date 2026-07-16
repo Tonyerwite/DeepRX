@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import copy
 import json
+import math
 from pathlib import Path
 from typing import Dict, Iterable, List
 
@@ -17,6 +19,36 @@ from deeprx.matlab_bridge import (
     paper_dataset_iteration,
     sample_paper_dataset_parameters,
 )
+
+
+FIGURE6A_FFT_SIZE = 512
+FIGURE6A_OCCUPIED_SUBCARRIERS = 26 * 12
+
+
+def figure6a_snr_offset_db() -> float:
+    return 10.0 * math.log10(FIGURE6A_FFT_SIZE / FIGURE6A_OCCUPIED_SUBCARRIERS)
+
+
+def convert_figure6a_metrics_to_paper_snr(metrics: Dict) -> Dict:
+    converted = copy.deepcopy(metrics)
+    matlab_snr = list(converted.get("matlab_per_re_snr_db", converted["snr_db"]))
+    offset_db = figure6a_snr_offset_db()
+    converted["matlab_per_re_snr_db"] = matlab_snr
+    converted["paper_whole_band_snr_db"] = [value - offset_db for value in matlab_snr]
+    converted["snr_conversion"] = {
+        "source_definition": "MathWorks R2025b SNR per resource element and per antenna",
+        "target_definition": "DeepRx paper whole-band SNR",
+        "fft_size": FIGURE6A_FFT_SIZE,
+        "occupied_subcarriers": FIGURE6A_OCCUPIED_SUBCARRIERS,
+        "offset_db": offset_db,
+        "formula": "paper_whole_band_snr_db = matlab_per_re_snr_db - offset_db",
+    }
+    return converted
+
+
+def figure6a_x_limits(snr_values: Iterable[float]) -> tuple[float, float]:
+    snr_values = list(snr_values)
+    return min(snr_values) - 0.5, max(snr_values) + 0.5
 
 
 def run_figure6a_reproduction(
@@ -141,27 +173,54 @@ def initialize_figure6a_metrics(
     }
 
 
-def plot_figure6a(metrics: Dict, path: Path) -> None:
-    snr = metrics["snr_db"]
+def plot_figure6a(metrics: Dict, path: Path, *, snr_domain: str = "matlab_per_re") -> None:
+    if snr_domain == "matlab_per_re":
+        snr = metrics.get("matlab_per_re_snr_db", metrics["snr_db"])
+        xlabel = "SINR (dB)"
+    elif snr_domain == "paper_whole_band":
+        metrics = convert_figure6a_metrics_to_paper_snr(metrics)
+        snr = metrics["paper_whole_band_snr_db"]
+        xlabel = "Whole-band SINR (dB)"
+    else:
+        raise ValueError(f"Unsupported SNR domain: {snr_domain}")
+
     curves = metrics["curves"]
+    path = Path(path)
+    path.parent.mkdir(parents=True, exist_ok=True)
     plt.figure(figsize=(7.0, 5.0), dpi=160)
     plt.semilogy(snr, curves["deeprx_1_pilot"], "-o", color="blue", label="DeepRx, 1 pilot")
     plt.semilogy(snr, curves["deeprx_2_pilots"], "--D", color="blue", label="DeepRx, 2 pilots")
     plt.semilogy(snr, curves["lmmse_1_pilot"], "-s", color="red", label="LMMSE, 1 pilot")
     plt.semilogy(snr, curves["lmmse_2_pilots"], "--^", color="red", label="LMMSE, 2 pilots")
     plt.semilogy(snr, curves["lmmse_known_channel"], ":X", color="green", label="LMMSE, known channel")
-    plt.xlabel("SINR (dB)")
+    plt.xlabel(xlabel)
     plt.ylabel("Uncoded BER")
     plt.ylim(1e-4, 1.0)
-    if min(snr) == max(snr):
-        plt.xlim(min(snr) - 0.5, max(snr) + 0.5)
-    else:
-        plt.xlim(min(snr), max(snr))
+    plt.xlim(*figure6a_x_limits(snr))
     plt.grid(True, which="both", alpha=0.45)
     plt.legend(loc="lower left")
     plt.tight_layout()
     plt.savefig(path)
     plt.close()
+
+
+def write_paper_snr_figure6a_artifacts(
+    source_metrics_path: Path,
+    corrected_metrics_path: Path,
+    corrected_figure_path: Path,
+) -> Dict:
+    source_metrics_path = Path(source_metrics_path).resolve()
+    corrected_metrics_path = Path(corrected_metrics_path).resolve()
+    corrected_figure_path = Path(corrected_figure_path).resolve()
+    if corrected_metrics_path == source_metrics_path:
+        raise ValueError("Corrected metrics path must differ from the source metrics path")
+
+    metrics = json.loads(source_metrics_path.read_text(encoding="utf-8"))
+    corrected = convert_figure6a_metrics_to_paper_snr(metrics)
+    corrected_metrics_path.parent.mkdir(parents=True, exist_ok=True)
+    _write_json_atomic(corrected_metrics_path, corrected)
+    plot_figure6a(corrected, corrected_figure_path, snr_domain="paper_whole_band")
+    return corrected
 
 
 def _mean(values: Iterable[float]) -> float:

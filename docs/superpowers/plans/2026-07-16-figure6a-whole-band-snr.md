@@ -14,7 +14,7 @@
 - Preserve every existing BER value exactly.
 - Preserve the original MC=500 JSON and PNG byte-for-byte.
 - Use `paper_whole_band_snr_db = matlab_per_re_snr_db - 10*log10(512/312)`.
-- Write corrected outputs under new filenames.
+- Keep corrected metrics temporary and replace only the README's documentation PNG.
 
 ---
 
@@ -82,18 +82,15 @@ Run: `.\.venv\Scripts\python.exe -m pytest -q`
 
 Expected: all tests pass.
 
-### Task 3: Generate And Publish Corrected Assets
+### Task 3: Generate And Publish The Corrected Figure
 
 **Files:**
-- Create: `outputs/final_reproduction_30k_mc500/figure6a/figure6a_metrics_paper_snr.json`
-- Create: `outputs/final_reproduction_30k_mc500/figure6a/figure6a_uncoded_ber_paper_snr.png`
-- Create: `docs/assets/figure6a_30k_mc500_metrics_paper_snr.json`
-- Create: `docs/assets/figure6a_30k_mc500_paper_snr.png`
+- Modify: `docs/assets/figure6a_30k_mc500.png`
 - Modify: `README.md`
 
 **Interfaces:**
 - Consumes: completed raw metrics at `outputs/final_reproduction_30k_mc500/figure6a/figure6a_metrics.json`
-- Produces: separate corrected JSON and PNG artifacts.
+- Produces: the corrected README PNG while keeping corrected metrics temporary.
 
 - [ ] **Step 1: Record source hashes**
 
@@ -104,15 +101,15 @@ Expected SHA-256 values:
 
 - [ ] **Step 2: Run the replot CLI**
 
-Run the CLI with explicit corrected output paths under the final reproduction directory, then copy those corrected artifacts into `docs/assets/` under the specified new names.
+Run the CLI with the corrected metrics path under the system temporary directory and the corrected figure path set to `docs/assets/figure6a_30k_mc500.png`.
 
 - [ ] **Step 3: Update README**
 
-Display the corrected asset, label the table's source SNR as MathWorks per-RE SNR, document the 2.151 dB conversion, and add the replot command without removing the raw-result provenance.
+Keep the existing image reference and add a short note documenting the 2.151 dB conversion without removing the raw-result provenance.
 
 - [ ] **Step 4: Verify source preservation and corrected data**
 
-Recompute both source hashes, compare corrected curves to source curves exactly, and check the corrected SNR endpoints.
+Recompute both source hashes, compare corrected curves to source curves exactly, check the corrected SNR endpoints, and delete the temporary corrected metrics.
 
 ### Task 4: Visual And Final Verification
 

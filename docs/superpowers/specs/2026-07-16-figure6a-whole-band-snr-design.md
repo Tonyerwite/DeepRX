@@ -27,8 +27,8 @@ The completed MATLAB samples at `0, 3, ..., 21 dB` therefore appear at `-2.151, 
 
 - Do not modify or delete `outputs/final_reproduction_30k_mc500/figure6a/figure6a_metrics.json`.
 - Do not modify or delete `outputs/final_reproduction_30k_mc500/figure6a/figure6a_uncoded_ber.png`.
-- Generate a separate corrected JSON containing both SNR domains, conversion metadata, and the unchanged BER arrays.
-- Generate a separate corrected PNG; no MATLAB engine or model inference is used during replotting.
+- Generate corrected metrics only as a temporary verification artifact containing both SNR domains, conversion metadata, and the unchanged BER arrays.
+- Replace the README's existing documentation PNG with the corrected final PNG; no MATLAB engine or model inference is used during replotting.
 
 ## Program Changes
 
@@ -36,14 +36,12 @@ The completed MATLAB samples at `0, 3, ..., 21 dB` therefore appear at `-2.151, 
 2. Make the plotter select an explicit SNR domain while retaining legacy behavior for existing callers.
 3. Add `scripts/replot_figure6a.py` to load completed metrics and emit corrected JSON/PNG files.
 4. Add focused tests for the exact 2.151 dB conversion, unchanged BER arrays, and non-overwriting output behavior.
-5. Publish the corrected figure as a new documentation asset and update the README figure reference and SNR-definition note.
+5. Replace the README figure asset and add a short SNR-definition note without publishing intermediate corrected metrics.
 
 ## Outputs
 
-- `outputs/final_reproduction_30k_mc500/figure6a/figure6a_metrics_paper_snr.json`
-- `outputs/final_reproduction_30k_mc500/figure6a/figure6a_uncoded_ber_paper_snr.png`
-- `docs/assets/figure6a_30k_mc500_paper_snr.png`
-- `docs/assets/figure6a_30k_mc500_metrics_paper_snr.json`
+- `docs/assets/figure6a_30k_mc500.png`
+- Temporary corrected metrics are deleted after verification.
 
 ## Verification
 

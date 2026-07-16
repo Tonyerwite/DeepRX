@@ -1,8 +1,6 @@
 from __future__ import annotations
 
-import copy
 import json
-import math
 from pathlib import Path
 from typing import Dict, Iterable, List
 
@@ -21,36 +19,6 @@ from deeprx.matlab_bridge import (
 )
 
 
-FIGURE6A_FFT_SIZE = 512
-FIGURE6A_OCCUPIED_SUBCARRIERS = 26 * 12
-
-
-def figure6a_snr_offset_db() -> float:
-    return 10.0 * math.log10(FIGURE6A_FFT_SIZE / FIGURE6A_OCCUPIED_SUBCARRIERS)
-
-
-def convert_figure6a_metrics_to_paper_snr(metrics: Dict) -> Dict:
-    converted = copy.deepcopy(metrics)
-    matlab_snr = list(converted.get("matlab_per_re_snr_db", converted["snr_db"]))
-    offset_db = figure6a_snr_offset_db()
-    converted["matlab_per_re_snr_db"] = matlab_snr
-    converted["paper_whole_band_snr_db"] = [value - offset_db for value in matlab_snr]
-    converted["snr_conversion"] = {
-        "source_definition": "MathWorks R2025b SNR per resource element and per antenna",
-        "target_definition": "DeepRx paper whole-band SNR",
-        "fft_size": FIGURE6A_FFT_SIZE,
-        "occupied_subcarriers": FIGURE6A_OCCUPIED_SUBCARRIERS,
-        "offset_db": offset_db,
-        "formula": "paper_whole_band_snr_db = matlab_per_re_snr_db - offset_db",
-    }
-    return converted
-
-
-def figure6a_x_limits(snr_values: Iterable[float]) -> tuple[float, float]:
-    snr_values = list(snr_values)
-    return min(snr_values) - 0.5, max(snr_values) + 0.5
-
-
 def run_figure6a_reproduction(
     checkpoint_path: Path,
     output_dir: Path,
@@ -62,7 +30,8 @@ def run_figure6a_reproduction(
     restart: bool = False,
 ) -> Dict:
     config = PaperFigure6Config()
-    checkpoint_path = Path(checkpoint_path).resolve()
+    checkpoint_metadata_path = Path(checkpoint_path)
+    checkpoint_path = checkpoint_metadata_path.resolve()
     output_dir = Path(output_dir)
     snr_values = list(config.figure6_sinr_points_db if snr_points is None else snr_points)
     samples = config.validation_samples_per_point if samples_per_point is None else samples_per_point
@@ -85,7 +54,7 @@ def run_figure6a_reproduction(
         completed_snr_count = int(progress["completed_snr_count"])
     else:
         metrics = initialize_figure6a_metrics(
-            checkpoint_path=checkpoint_path,
+            checkpoint_path=checkpoint_metadata_path,
             snr_values=snr_values,
             samples_per_point=samples,
             n_frames=n_frames,
@@ -173,54 +142,40 @@ def initialize_figure6a_metrics(
     }
 
 
-def plot_figure6a(metrics: Dict, path: Path, *, snr_domain: str = "matlab_per_re") -> None:
-    if snr_domain == "matlab_per_re":
-        snr = metrics.get("matlab_per_re_snr_db", metrics["snr_db"])
-        xlabel = "SINR (dB)"
-    elif snr_domain == "paper_whole_band":
-        metrics = convert_figure6a_metrics_to_paper_snr(metrics)
-        snr = metrics["paper_whole_band_snr_db"]
-        xlabel = "Whole-band SINR (dB)"
-    else:
-        raise ValueError(f"Unsupported SNR domain: {snr_domain}")
+def figure6a_x_limits(snr_values: Iterable[float]) -> tuple[float, float]:
+    values = list(snr_values)
+    if min(values) == max(values):
+        return min(values) - 0.5, max(values) + 0.5
+    return min(values), max(values)
 
+
+def figure6a_y_limits(curves: Dict[str, List[float]]) -> tuple[float, float]:
+    positive_values = [value for values in curves.values() for value in values if value > 0]
+    lower = min(1e-4, min(positive_values) * 0.75) if positive_values else 1e-4
+    return lower, 1.0
+
+
+def plot_figure6a(metrics: Dict, path: Path) -> None:
+    snr = metrics["snr_db"]
     curves = metrics["curves"]
     path = Path(path)
     path.parent.mkdir(parents=True, exist_ok=True)
     plt.figure(figsize=(7.0, 5.0), dpi=160)
-    plt.semilogy(snr, curves["deeprx_1_pilot"], "-o", color="blue", label="DeepRx, 1 pilot")
-    plt.semilogy(snr, curves["deeprx_2_pilots"], "--D", color="blue", label="DeepRx, 2 pilots")
-    plt.semilogy(snr, curves["lmmse_1_pilot"], "-s", color="red", label="LMMSE, 1 pilot")
-    plt.semilogy(snr, curves["lmmse_2_pilots"], "--^", color="red", label="LMMSE, 2 pilots")
-    plt.semilogy(snr, curves["lmmse_known_channel"], ":X", color="green", label="LMMSE, known channel")
-    plt.xlabel(xlabel)
+    plt.semilogy(snr, curves["deeprx_1_pilot"], "-o", color="blue", label="DeepRx, 1 pilot", clip_on=False)
+    plt.semilogy(snr, curves["deeprx_2_pilots"], "--D", color="blue", label="DeepRx, 2 pilots", clip_on=False)
+    plt.semilogy(snr, curves["lmmse_1_pilot"], "-s", color="red", label="LMMSE, 1 pilot", clip_on=False)
+    plt.semilogy(snr, curves["lmmse_2_pilots"], "--^", color="red", label="LMMSE, 2 pilots", clip_on=False)
+    plt.semilogy(snr, curves["lmmse_known_channel"], ":X", color="green", label="LMMSE, known channel", clip_on=False)
+    plt.xlabel("SINR (dB)")
     plt.ylabel("Uncoded BER")
-    plt.ylim(1e-4, 1.0)
+    plt.ylim(*figure6a_y_limits(curves))
     plt.xlim(*figure6a_x_limits(snr))
+    plt.xticks(snr)
     plt.grid(True, which="both", alpha=0.45)
     plt.legend(loc="lower left")
     plt.tight_layout()
     plt.savefig(path)
     plt.close()
-
-
-def write_paper_snr_figure6a_artifacts(
-    source_metrics_path: Path,
-    corrected_metrics_path: Path,
-    corrected_figure_path: Path,
-) -> Dict:
-    source_metrics_path = Path(source_metrics_path).resolve()
-    corrected_metrics_path = Path(corrected_metrics_path).resolve()
-    corrected_figure_path = Path(corrected_figure_path).resolve()
-    if corrected_metrics_path == source_metrics_path:
-        raise ValueError("Corrected metrics path must differ from the source metrics path")
-
-    metrics = json.loads(source_metrics_path.read_text(encoding="utf-8"))
-    corrected = convert_figure6a_metrics_to_paper_snr(metrics)
-    corrected_metrics_path.parent.mkdir(parents=True, exist_ok=True)
-    _write_json_atomic(corrected_metrics_path, corrected)
-    plot_figure6a(corrected, corrected_figure_path, snr_domain="paper_whole_band")
-    return corrected
 
 
 def _mean(values: Iterable[float]) -> float:

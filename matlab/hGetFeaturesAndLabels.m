@@ -12,6 +12,7 @@ function [results,X,T,simParameters] = hGetFeaturesAndLabels(simParameters,randP
         randParameters
         opts.Iteration = 1
         opts.Net = []
+        opts.IndependentChannel = false
     end
 
     % Determine the type of receiver: AI-native or conventional
@@ -120,9 +121,12 @@ function [results,X,T,simParameters] = hGetFeaturesAndLabels(simParameters,randP
     % and transforms on the CPU for reproducibility
     sc = RandStream('Threefry', 'Seed', opts.Iteration);
     RandStream.setGlobalStream(sc);
-    if simParameters.TrainNow
+    if simParameters.TrainNow || opts.IndependentChannel
         channel.RandomStream = 'Global stream';
     end
+    % Preserve the paper's per-antenna 2Rx power during evaluation. Training
+    % retains the MathWorks-normalized input convention used by the cache.
+    channel.NormalizeChannelOutputs = simParameters.TrainNow;
     
     % Assign simulation channel parameters and waveform sample rate to the object
     channel.DelayProfile        = simParameters.DelayProfile;
@@ -270,8 +274,19 @@ function [results,X,T,simParameters] = hGetFeaturesAndLabels(simParameters,randP
 
 		% Add AWGN
 		SNR = 10^(SNRdB/10);
-		N0 = 1/sqrt(simLocal.NRxAnts * double(waveinfoLocal.Nfft) * SNR);
-		noise = N0 * randn(size(rxWaveform), "like", rxWaveform);
+		if simLocal.TrainNow
+			% Retain the convention used by the existing fixed training cache.
+			N0 = 1/sqrt(simLocal.NRxAnts * double(waveinfoLocal.Nfft) * SNR);
+			noise = N0 * randn(size(rxWaveform), "like", rxWaveform);
+		else
+			% Match the reference MIMO simulation: derive complex AWGN variance
+			% from the realized signal power averaged over receive antennas.
+			signalPowerPerRxAntenna = mean(abs(rxWaveform).^2, "all");
+			noiseVariance = signalPowerPerRxAntenna / SNR;
+			noiseReal = randn(size(rxWaveform), "like", real(rxWaveform));
+			noiseImag = randn(size(rxWaveform), "like", real(rxWaveform));
+			noise = sqrt(noiseVariance/2) * (noiseReal + 1i*noiseImag);
+		end
 		rxWaveform = rxWaveform + noise;
 
 		% Perfect synchronization using channel information
@@ -317,10 +332,14 @@ function [results,X,T,simParameters] = hGetFeaturesAndLabels(simParameters,randP
                 % rxGrid         : [F S NRxAnts] complex array
                 % dmrsGrid       : [F S 1] complex array
                 % rawChanEstGrid : [F S NRxAnts] complex array
-                rawChanEstGrid = rxGrid .* conj(dmrsGrid);
+                % The checkpoint was trained with normalized channel outputs.
+                % Adapt only its input features; the simulated 2Rx waveform and
+                % conventional receivers retain the paper's power convention.
+                neuralRxGrid = rxGrid / sqrt(simLocal.NRxAnts);
+                rawChanEstGrid = neuralRxGrid .* conj(dmrsGrid);
                 
                 % Concatenate real and imaginary parts of the input arrays
-                X = cat(3, real(rxGrid), imag(rxGrid), ...
+                X = cat(3, real(neuralRxGrid), imag(neuralRxGrid), ...
                            real(dmrsGrid), imag(dmrsGrid), ...
                            real(rawChanEstGrid), imag(rawChanEstGrid));
     

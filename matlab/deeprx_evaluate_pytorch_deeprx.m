@@ -33,5 +33,5 @@ randParameters.MaxDopplerShift = maxDopplerShift;
 randParameters.DMRSAddPos = dmrsAdditionalPosition;
 randParameters.DMRSConfigType = dmrsConfigurationType;
 
-[results, ~, ~, ~] = hGetFeaturesAndLabels(simParameters, randParameters, Net=net, Iteration=iteration);
+[results, ~, ~, ~] = hGetFeaturesAndLabels(simParameters, randParameters, Net=net, Iteration=iteration, IndependentChannel=true);
 end
